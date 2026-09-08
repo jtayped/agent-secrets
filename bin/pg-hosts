@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Postgres servers, rendered from the secret index rather than a separate file.
+#
+#   pg-hosts                  every server, grouped by scope
+#   pg-hosts <server>         just that one server
+#   pg-hosts --scope <scope>  only the servers in that scope
+#
+# This used to read ~/.pg-hosts, a hand-maintained catalog listing the same key
+# names a second time. That drifted, as any duplicate does: it grew a repeated
+# scope header and two notes that stopped mid-sentence, and nothing told you
+# when a PG_* key was added without a matching entry. Now there is one source of
+# truth. A group under pg.* IS the catalog entry, and a key cannot exist without
+# appearing here.
+#
+# Still never decrypts. The index holds group paths, key names, descriptions and
+# attributes, and no values, so this is safe to run in any session -- the same
+# property the old catalog had, for the same reason.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/secret-common.sh"
+
+usage() { echo "usage: pg-hosts [<server> | --scope <scope>]" >&2; exit 1; }
+
+filter=""; scopefilter=""
+case "${1:-}" in
+    --scope) [[ $# -eq 2 ]] || usage; scopefilter="$2" ;;
+    --*)     usage ;;
+    "")      [[ $# -eq 0 ]] || usage ;;
+    *)       [[ $# -eq 1 ]] || usage; filter="$1" ;;
+esac
+
+shopt -s nullglob
+tocs=("$secrets_index_dir"/*.toc)
+[[ ${#tocs[@]} -gt 0 ]] || { echo "error: no index yet. run: secret-reindex" >&2; exit 1; }
+
+found=0
+for toc in "${tocs[@]}"; do
+    scope="$(basename "$toc" .toc)"
+    [[ -n "$scopefilter" && "$scope" != "$scopefilter" ]] && continue
+
+    # A stale index would describe servers that no longer match the scope.
+    sf="$secrets_scopes_dir/$scope.env.gpg"
+    if [[ -f "$sf" ]]; then
+        want="$(sha256sum < "$sf" | cut -d' ' -f1)"
+        have="$(sed -n '1s/.*sha256=//p' "$toc")"
+        [[ "$want" == "$have" ]] || { echo "warning: index for '$scope' is stale. run: secret-reindex $scope" >&2; continue; }
+    fi
+
+    out="$(awk -F'\t' -v scope="$scope" -v filter="$filter" '
+      BEGIN { ng=0; nk=0 }
+      $1=="G"  { path[ng]=$2; own[$2]=$3; eff[$2]=$4; desc[$2]=$6; ng++; next }
+      $1=="GA" { a[$2 SUBSEP $3]=$4; next }
+      $1=="K"  { kv[nk]=$2; kg[nk]=$3; kl[nk]=$4; nk++; next }
+      function attr(g,n) { return (g SUBSEP n) in a ? a[g SUBSEP n] : "" }
+      function keysof(g,  i,s) { s=""; for(i=0;i<nk;i++) if(kg[i]==g) s = s (s==""?"":" ") kv[i]; return s }
+      function isunder(c,p) { return (c==p || index(c ".", p ".")==1) }
+      END {
+        # A server is whatever the endpoint groups name via #@a server=.
+        for (i=0;i<ng;i++) {
+          p=path[i]
+          if (p !~ /^pg(\.|$)/) continue
+          s = attr(p,"server")
+          if (s != "" && attr(p,"kind")=="endpoint") { srv[s]=p; if (!(s in seen)) { order[ns++]=s; seen[s]=1 } }
+        }
+        for (si=0; si<ns; si++) {
+          s=order[si]
+          if (filter != "" && s != filter) continue
+          if (!hdr) { printf "=== scope: %s ===\n\n", scope; hdr=1 }
+          matched=1
+          ep=srv[s]
+          printf "%s%s\n", s, (own[ep]||eff[ep] ? "   [sensitive, approval required]" : "")
+          printf "    group: %s\n", ep
+          if (desc[ep]!="") printf "    %s\n", desc[ep]
+          k=keysof(ep); if (k!="") printf "    endpoint keys: %s\n", k
+          # Databases and roles are the groups that name this server, plus
+          # anything nested under the endpoint group itself.
+          printf "    databases:\n"
+          for (i=0;i<ng;i++) { p=path[i]
+            if (attr(p,"kind")!="database") continue
+            # Either the group names this server explicitly, or it is nested
+            # under the endpoint group, which says the same thing structurally.
+            if (!(attr(p,"server")==s || isunder(p,ep))) continue
+            printf "      %-34s %s\n", p, desc[p]
+            kk=keysof(p); if (kk!="") printf "        keys: %s\n", kk
+          }
+          printf "    roles:\n"
+          for (i=0;i<ng;i++) { p=path[i]
+            if (attr(p,"kind")!="role") continue
+            par=p; sub(/\.[^.]*$/, "", par)
+            if (!(attr(par,"server")==s || isunder(p,ep))) continue
+            printf "      %-34s %-3s%s %s\n", p, attr(p,"mode"),
+                   (own[p]||eff[p] ? " [SENS]" : "      "), desc[p]
+            # The exact variable names, because that is what you actually pass
+            # to secret-run. The old catalog listed them and losing them would
+            # make this view pretty but unusable.
+            rk=keysof(p); if (rk!="") printf "        keys: %s\n", rk
+          }
+          printf "\n"
+        }
+        if (!matched) exit 9
+      }' "$toc")" || continue
+    [[ -n "$out" ]] && { printf '%s\n' "$out"; found=1; }
+done
+
+if [[ $found -eq 0 ]]; then
+    if [[ -n "$filter" ]];      then echo "error: no server \"$filter\"" >&2
+    elif [[ -n "$scopefilter" ]]; then echo "error: no servers in scope \"$scopefilter\"" >&2
+    else echo "error: no servers declared" >&2; fi
+    exit 1
+fi

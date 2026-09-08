@@ -1,0 +1,6 @@
+*.gpg
+.key
+.env
+.env.*
+!.env.example
+test-output/

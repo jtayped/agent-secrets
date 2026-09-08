@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Lists the SSH aliases declared in ~/.ssh/config, with whatever comment sits
+# above each Host block as its note.
+#
+#   ssh-hosts            every alias, as written in the config
+#   ssh-hosts <alias>    what ssh actually resolves for that alias (ssh -G)
+#
+# The listing reads the config directly rather than shelling out per host: it
+# shows what is *declared*, which is the thing worth reading. The single-alias
+# view goes through `ssh -G`, which is authoritative — it applies Match blocks,
+# global defaults and Include files that a plain parse would miss.
+set -euo pipefail
+
+config="${SSH_CONFIG:-$HOME/.ssh/config}"
+
+[[ -f "$config" ]] || { echo "error: no ssh config at $config" >&2; exit 1; }
+
+if [[ $# -gt 1 ]]; then
+    echo "usage: ssh-hosts [<alias>]" >&2
+    exit 1
+fi
+
+if [[ $# -eq 1 ]]; then
+    ssh -G "$1"
+    exit 0
+fi
+
+awk '
+function flush() {
+    if (alias == "") return
+    host = (hostname != "" ? hostname : alias)
+    line = "    " (user != "" ? user "@" : "") host ":" (port != "" ? port : "22")
+    if (identity != "") line = line "   key " identity
+    print alias
+    print line
+    n = split(note, parts, "\n")
+    for (i = 1; i <= n; i++) if (parts[i] != "") print "    " parts[i]
+    print ""
+    alias = ""; hostname = ""; user = ""; port = ""; identity = ""; note = ""
+}
+
+# A note has to sit directly above its Host block. A blank line ends it, which
+# is what keeps a file header from being read as the first host every time.
+/^[ \t]*$/ { pending = ""; next }
+
+/^[ \t]*#/ {
+    c = $0
+    sub(/^[ \t]*#[ \t]?/, "", c)
+    pending = (pending == "" ? c : pending "\n" c)
+    next
+}
+
+tolower($1) == "include" { included = 1 }
+
+tolower($1) == "host" {
+    flush()
+    names = ""
+    for (i = 2; i <= NF; i++) {
+        # Wildcard and negated patterns are defaults, not aliases you can ssh to.
+        if ($i ~ /[*?]/ || $i ~ /^!/) continue
+        names = (names == "" ? $i : names " " $i)
+    }
+    alias = names
+    note = pending
+    pending = ""
+    next
+}
+
+NF > 0 {
+    key = tolower($1)
+    if (key == "hostname")     hostname = $2
+    else if (key == "user")    user     = $2
+    else if (key == "port")    port     = $2
+    else if (key == "identityfile") {
+        identity = $2
+        sub(/^.*[\/\\]/, "", identity)   # basename — the key name is the useful part
+    }
+    pending = ""
+}
+
+END {
+    flush()
+    if (included) print "note: this config has an Include directive; included files are not listed. Use `ssh-hosts <alias>` for the resolved view."
+}
+' "$config"
