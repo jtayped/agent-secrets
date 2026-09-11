@@ -21,13 +21,13 @@ jobs:
       - name: install shellcheck
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
       - name: bash syntax
-        run: bash -n install.sh install-root.sh lib/agent-secrets-helper bin/* tests/smoke.sh
+        run: bash -n install.sh install-root.sh lib/agent-secrets-helper bin/* migrations/*.sh tests/*.sh
       - name: shellcheck
         run: |
           shellcheck -x -S warning \
             install.sh install-root.sh lib/agent-secrets-helper \
             bin/secret-* bin/pg-hosts bin/ssh-hosts bin/secrets-bisync \
-            tests/smoke.sh
+            migrations/*.sh tests/*.sh
 
   test:
     # macos-latest is apple silicon and macos-15-intel is x86_64; between them
@@ -56,3 +56,5 @@ jobs:
         run: ./tests/smoke.sh
       - name: key generation
         run: ./tests/key.sh
+      - name: upgrade must not touch the store
+        run: ./tests/upgrade.sh

@@ -88,6 +88,7 @@ secret-approve scope --motive "short reason" group [group...]
 secret-run scope [group] [--motive "short reason"] -- command [args...]
 secret-reindex [scope...]
 secret-doctor
+secret-update [--check]
 pg-hosts [server | --scope scope]
 ssh-hosts [alias]
 secrets-bisync
@@ -118,6 +119,22 @@ back up scopes/ and key/.key separately. do not put key/ in a broad sync folder 
 ## skill
 
 [skills/secrets/SKILL.md](skills/secrets/SKILL.md) is a portable skill file for coding agents. copy it into the agent's skill directory after installing the commands. it tells an agent how to discover metadata, narrow a group, and avoid printing values.
+
+## updating
+
+~~~bash
+secret-update --check
+secret-update
+~~~
+
+an upgrade replaces code and never reads, rewrites or deletes a stored secret.
+that is checked in ci: `tests/upgrade.sh` fingerprints every byte of a store,
+reinstalls over the top, and fails if anything moved.
+
+if you run the hardened setup, the root-owned helper is installed separately
+and `secret-update` will remind you to rerun the root installer.
+[updating.md](docs/updating.md) covers the version numbers, migrations, and
+what the backup does and does not include.
 
 ## platforms
 

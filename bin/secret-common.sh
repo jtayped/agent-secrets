@@ -57,6 +57,66 @@ secrets_scopes_dir="$secrets_dir/scopes"
 # shellcheck disable=SC2034
 secrets_index_dir="$secrets_dir/index"
 
+# ---------------------------------------------------------------------------
+# versions
+#
+# three numbers, because three different things can be out of step and each
+# failure looks different:
+#
+#   release        what you installed. cosmetic, but it is what you quote in a
+#                  bug report.
+#   helper protocol the contract between these wrappers and the root-owned
+#                  helper. the helper is installed separately, through sudo, so
+#                  it can and does lag behind the wrappers after an upgrade.
+#   store format   the on-disk layout of ~/.secrets. the only one that can
+#                  require a migration, and the only one recorded in the store.
+
+# bump when a migration is added to migrations/.
+# shellcheck disable=SC2034
+readonly AGENT_SECRETS_STORE_FORMAT=1
+# the lowest helper protocol these wrappers can talk to.
+readonly AGENT_SECRETS_MIN_HELPER_PROTOCOL=3
+
+agent_secrets_self_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# written by install.sh next to the commands, so this works wherever the
+# commands were installed. running straight out of a clone falls back to the
+# VERSION file at the top of the repository.
+agent_secrets_manifest="$agent_secrets_self_dir/secret-manifest"
+manifest_value() {
+    [[ -f "$agent_secrets_manifest" ]] || return 1
+    sed -n "s/^$1=//p" "$agent_secrets_manifest" | head -1
+}
+
+agent_secrets_version() {
+    local v
+    if v="$(manifest_value version)" && [[ -n "$v" ]]; then
+        printf '%s\n' "$v"
+        return 0
+    fi
+    if [[ -f "$agent_secrets_self_dir/../VERSION" ]]; then
+        tr -d '[:space:]' < "$agent_secrets_self_dir/../VERSION"
+        printf '\n'
+        return 0
+    fi
+    printf 'unknown\n'
+}
+
+store_version_file() { printf '%s/.store-version' "$secrets_dir"; }
+
+# a store with no recorded version predates versioning. that is version 0, and
+# migration 001 is what adopts it.
+store_version() {
+    local f; f="$(store_version_file)"
+    if [[ -f "$f" ]]; then
+        local v; v="$(tr -d '[:space:]' < "$f")"
+        [[ "$v" =~ ^[0-9]+$ ]] || { echo "error: unreadable store version in $f" >&2; return 1; }
+        printf '%s\n' "$v"
+    else
+        printf '0\n'
+    fi
+}
+
 # the local helper makes the first setup usable without sudo. after the root
 # install, the installed helper owns the key and always wins this lookup.
 readonly agent_secrets_helper_installed="${AGENT_SECRETS_HELPER_INSTALLED:-/usr/local/libexec/agent-secrets-helper}"
@@ -74,6 +134,26 @@ secret_helper() {
 }
 
 secret_helper_hardened() { [[ -x "$agent_secrets_helper_installed" ]]; }
+
+# the wrappers are replaced by install.sh, the root-owned helper only by
+# install-root.sh under sudo. upgrading one and not the other is the normal
+# way this ends up mismatched, so say which command fixes it rather than
+# failing with whatever the old helper happens to do with new arguments.
+require_helper_protocol() {
+    local caller="$1" have
+    if ! have="$(secret_helper version 2>/dev/null)" || [[ ! "$have" =~ ^[0-9]+$ ]]; then
+        echo "$caller: the helper did not report a protocol version." >&2
+        echo "  reinstall it: sudo $HOME/.local/libexec/agent-secrets-install-root" >&2
+        return 78
+    fi
+    if [[ "$have" -lt "$AGENT_SECRETS_MIN_HELPER_PROTOCOL" ]]; then
+        echo "$caller: the installed helper speaks protocol $have, these commands need $AGENT_SECRETS_MIN_HELPER_PROTOCOL." >&2
+        echo "  the root-owned helper is upgraded separately, under sudo:" >&2
+        echo "  sudo $HOME/.local/libexec/agent-secrets-install-root" >&2
+        return 78
+    fi
+    return 0
+}
 
 list_scopes() {
     local file

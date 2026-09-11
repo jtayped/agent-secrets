@@ -43,7 +43,8 @@ fi
 
 install -d -m 700 "$bin_dir" "$lib_dir" "$source_dir"
 for command in secret-init secret-list secret-edit secret-set secret-approve secret-run \
-               secret-reindex secret-doctor pg-hosts ssh-hosts secrets-bisync secret-helper-status; do
+               secret-reindex secret-doctor secret-update pg-hosts ssh-hosts secrets-bisync \
+               secret-helper-status; do
     install -m 755 "$repo_dir/bin/$command" "$bin_dir/$command"
 done
 install -m 644 "$repo_dir/bin/secret-common.sh" "$bin_dir/secret-common.sh"
@@ -52,13 +53,34 @@ install -m 755 "$repo_dir/install-root.sh" "$lib_dir/agent-secrets-install-root"
 install -m 644 "$repo_dir/systemd/secrets-bisync.service" "$source_dir/secrets-bisync.service"
 install -m 644 "$repo_dir/systemd/secrets-bisync.timer" "$source_dir/secrets-bisync.timer"
 
+# the manifest is what lets secret-update find this checkout again, and what
+# tells you which commit you are actually running when something misbehaves.
+# it is written next to the commands so it is found wherever they were
+# installed, without secret-common.sh having to guess at xdg paths.
+version="$(tr -d '[:space:]' < "$repo_dir/VERSION")"
+commit=""
+if git -C "$repo_dir" rev-parse --short HEAD >/dev/null 2>&1; then
+    commit="$(git -C "$repo_dir" rev-parse --short HEAD)"
+fi
+umask 077
+cat > "$bin_dir/secret-manifest" <<MANIFEST
+version=$version
+source=$repo_dir
+commit=$commit
+installed=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+MANIFEST
+chmod 644 "$bin_dir/secret-manifest"
+
+# this installer writes to $bin_dir and $lib_dir only. the one thing it runs
+# that goes near the store is secret-init, which creates what is missing and
+# refuses to replace a key that already exists.
 "$bin_dir/secret-init"
 
 case ":$PATH:" in
     *":$bin_dir:"*) ;;
     *) echo "add $bin_dir to your path before opening a new shell." ;;
 esac
-echo "installed the commands under $bin_dir"
+echo "installed agent-secrets $version under $bin_dir"
 echo "run secret-edit example --new to create your first encrypted scope"
 echo "run secret-doctor to see what this machine supports"
 echo "run sudo $lib_dir/agent-secrets-install-root to protect the key with root ownership"
