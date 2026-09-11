@@ -30,10 +30,10 @@ echo "installing"
 
 "$XDG_LIB_HOME/agent-secrets-helper" encrypt demo > "$AGENT_SECRETS_DIR/scopes/demo.env.gpg" <<'scope'
 #@sensitive
-#@g service.api  credentials that must survive an upgrade
-SERVICE_API_TOKEN=do-not-lose-me
-#@g pg.demo  an endpoint
-PG_DEMO_HOST=db.test
+#@g service.api  a sensitive group, to prove the mark survives
+SERVICE_API_TOKEN=gated
+#@g pg.demo  an ordinary group, readable without a dialog
+PG_DEMO_HOST=do-not-lose-me
 scope
 secret-reindex demo >/dev/null
 
@@ -55,8 +55,15 @@ fi
 [[ "$key_before" == "$key_after" ]] || { echo "a reinstall replaced the key" >&2; exit 1; }
 
 # the scope still decrypts to the same thing, which is the point of all of it.
-value="$(secret-run demo service.api -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')"
+# read through an ungated group on purpose: this test is about data surviving
+# an upgrade, and ci has no display to approve a sensitive read on.
+value="$(secret-run demo pg.demo -- bash -c 'printf "%s" "$PG_DEMO_HOST"')"
 [[ "$value" == "do-not-lose-me" ]] || { echo "value did not survive the upgrade" >&2; exit 1; }
+
+# the sensitivity mark is metadata, so the value-free index can confirm it
+# survived without asking anyone to approve anything.
+secret-list demo --tree | grep -q 'service.api.*\[sensitive\]' \
+    || { echo "the sensitive mark did not survive the upgrade" >&2; exit 1; }
 
 # a store with no recorded version is version 0 and gets adopted, not rewritten.
 rm -f "$AGENT_SECRETS_DIR/.store-version"
@@ -70,8 +77,9 @@ if [[ "$before" != "$after_migration" ]]; then
     diff <(printf '%s\n' "$before") <(printf '%s\n' "$after_migration") >&2 || true
     exit 1
 fi
-value="$(secret-run demo service.api -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')"
+value="$(secret-run demo pg.demo -- bash -c 'printf "%s" "$PG_DEMO_HOST"')"
 [[ "$value" == "do-not-lose-me" ]]
+secret-list demo --tree | grep -q 'service.api.*\[sensitive\]'
 
 # --check has to be inert.
 before_check="$(fingerprint)"
