@@ -104,6 +104,8 @@ AGENT_SECRETS_SYNC_REMOTE=remote:agent-secrets secrets-bisync
 
 the script syncs scopes/ and index/. it never touches key/.
 
+scopes/ is ciphertext and safe to put anywhere. index/ is not: it holds no values, but it does hold group names, key names and your descriptions, which together describe what credentials you have. set AGENT_SECRETS_SYNC_INDEX=0 to sync only the ciphertext and run secret-reindex on the other machine.
+
 to run it on a timer, copy the two systemd files from ~/.local/libexec/agent-secrets/ into ~/.config/systemd/user/, replace replace-me:agent-secrets, then enable the timer:
 
 ~~~bash
