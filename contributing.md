@@ -2,16 +2,18 @@
 
 keep the repository free of encrypted scopes, keys, indexes from real stores, ssh keys, and rclone configuration.
 
-run both test suites before opening a pull request:
+run the test suite before opening a pull request:
 
 ~~~bash
-./tests/smoke.sh
-./tests/upgrade.sh
+for t in tests/*.sh; do "$t" || break; done
 ~~~
 
-`upgrade.sh` is the one that guards the promise in docs/updating.md: an upgrade
-replaces code and never touches a stored secret. if a change makes it fail, the
-change is wrong, not the test.
+[tests/readme.md](tests/readme.md) says what each file guards and why. the
+short version: `key.sh` and `integrity.sh` cover the paths where a bug loses
+secrets rather than returning a wrong answer, and `upgrade.sh` guards the
+promise in docs/updating.md that an upgrade replaces code and never touches a
+stored secret. a change that makes one of those fail is wrong until proven
+otherwise; do not adjust the test to match the change.
 
 run the root installer only on a disposable test account or your own machine. it writes to /usr/local/libexec and /etc/sudoers.d.
 

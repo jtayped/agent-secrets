@@ -56,5 +56,9 @@ jobs:
         run: ./tests/smoke.sh
       - name: key generation
         run: ./tests/key.sh
+      - name: scope format properties
+        run: ./tests/format.sh
+      - name: destructive paths and data loss
+        run: ./tests/integrity.sh
       - name: upgrade must not touch the store
         run: ./tests/upgrade.sh
