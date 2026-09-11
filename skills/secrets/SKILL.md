@@ -7,13 +7,17 @@ description: inspect and use locally encrypted secret scopes without printing se
 
 use the installed commands instead of reading a .env.gpg file or the key directly.
 
-start with:
+browse before you guess. `secret-list` works like `ls` and never decrypts a value:
 
 ~~~bash
-secret-list <scope> --tree
+secret-list                      # every scope
+secret-list <scope>              # the top level of that scope
+secret-list <scope> <group>      # one level inside that group
 ~~~
 
-it shows groups, key names, descriptions, attributes, and sensitivity marks without decrypting a value.
+each subgroup line carries a count of what is beneath it and a description, which is usually enough to pick the right branch in one or two steps. drill down until you find the group the task needs.
+
+`secret-list <scope> [<group>] --tree` prints a whole subtree at once. prefer the level view while exploring; a large scope's tree is long enough to be worth avoiding unless you already know the shape.
 
 use the narrowest group that the task needs:
 
@@ -25,7 +29,7 @@ a command without a group receives every value in the scope. do not use that for
 
 never print values. do not run secret-run with env, printenv, set, or a command that logs its environment. do not read the key or decrypt a scope directly.
 
-sensitive groups need a local approval. if the task knows it needs several groups, inspect the tree and batch them:
+sensitive groups need a local approval. if the task knows it needs several groups, find them first and then batch them:
 
 ~~~bash
 secret-approve <scope> --motive "run the requested check" <group> [<group>...]

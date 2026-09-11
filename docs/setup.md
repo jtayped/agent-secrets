@@ -35,11 +35,17 @@ SERVICE_API_TOKEN=replace-me
 
 save and close the editor. the command encrypts the scope and builds its index.
 
-inspect only the names and descriptions:
+browse it without decrypting anything. `secret-list` is an `ls`: a scope shows
+its top level, a group shows one level inside it.
 
 ~~~bash
-secret-list example --tree
+secret-list example
+secret-list example service
+secret-list example service.api
 ~~~
+
+`secret-list example --tree` prints the whole thing at once when that is what
+you want, and takes a group to scope it.
 
 add a generated value without placing it in shell history:
 

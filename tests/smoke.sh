@@ -26,17 +26,43 @@ PG_DEMO_HOST=db.test
 scope
 secret-reindex demo >/dev/null
 
-secret-list demo | grep -qx 'SERVICE_API_TOKEN'
-secret-list demo | grep -qx 'PG_DEMO_HOST'
+secret-list demo --keys | grep -qx 'SERVICE_API_TOKEN'
+secret-list demo --keys | grep -qx 'PG_DEMO_HOST'
 tree="$(secret-list demo --tree)"
 [[ "$tree" == *"service.api"* ]]
 [[ "$tree" == *"pg.demo"* ]]
+
+# the level view is an ls: one level, never the whole subtree.
+top="$(secret-list demo)"
+[[ "$top" == *"service/"* ]]
+[[ "$top" == *"pg/"* ]]
+[[ "$top" != *"service.api"* ]]
+
+level="$(secret-list demo service)"
+[[ "$level" == *"demo:service"* ]]
+[[ "$level" == *"api/"* ]]
+
+leaf="$(secret-list demo service.api)"
+[[ "$leaf" == *"TOKEN"* ]]
+[[ "$leaf" != *"PG_DEMO_HOST"* ]]
+
+# an unknown group names its siblings rather than just failing.
+if missing="$(secret-list demo service.nope 2>&1)"; then
+    echo "expected secret-list to reject an unknown group" >&2
+    exit 1
+fi
+[[ "$missing" == *"at that level:"* ]]
+
+# --tree scoped to a group stays inside it.
+subtree="$(secret-list demo service --tree)"
+[[ "$subtree" == *"service.api"* ]]
+[[ "$subtree" != *"pg.demo"* ]]
 
 result="$(secret-run demo service.api -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')"
 [[ "$result" == "first-value" ]]
 
 printf 'second-value' | secret-set demo service.api.second --desc "test second value" >/dev/null
-secret-list demo | grep -qx 'SERVICE_API_SECOND'
+secret-list demo --keys | grep -qx 'SERVICE_API_SECOND'
 ! grep -qF 'first-value' "$AGENT_SECRETS_DIR/index/demo.toc"
 ! grep -qF 'second-value' "$AGENT_SECRETS_DIR/index/demo.toc"
 
