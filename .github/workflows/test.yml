@@ -54,3 +54,5 @@ jobs:
           gpg --version | head -1
       - name: smoke test
         run: ./tests/smoke.sh
+      - name: key generation
+        run: ./tests/key.sh
