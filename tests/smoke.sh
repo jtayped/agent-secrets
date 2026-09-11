@@ -26,8 +26,8 @@ PG_DEMO_HOST=db.test
 scope
 secret-reindex demo >/dev/null
 
-secret-list demo | rg -qx 'SERVICE_API_TOKEN'
-secret-list demo | rg -qx 'PG_DEMO_HOST'
+secret-list demo | grep -qx 'SERVICE_API_TOKEN'
+secret-list demo | grep -qx 'PG_DEMO_HOST'
 tree="$(secret-list demo --tree)"
 [[ "$tree" == *"service.api"* ]]
 [[ "$tree" == *"pg.demo"* ]]
@@ -36,12 +36,25 @@ result="$(secret-run demo service.api -- bash -c 'printf "%s" "$SERVICE_API_TOKE
 [[ "$result" == "first-value" ]]
 
 printf 'second-value' | secret-set demo service.api.second --desc "test second value" >/dev/null
-secret-list demo | rg -qx 'SERVICE_API_SECOND'
-! rg -F 'first-value' "$AGENT_SECRETS_DIR/index/demo.toc"
-! rg -F 'second-value' "$AGENT_SECRETS_DIR/index/demo.toc"
+secret-list demo | grep -qx 'SERVICE_API_SECOND'
+! grep -qF 'first-value' "$AGENT_SECRETS_DIR/index/demo.toc"
+! grep -qF 'second-value' "$AGENT_SECRETS_DIR/index/demo.toc"
 
 pg="$(pg-hosts --scope demo)"
 [[ "$pg" == *"demo"* ]]
 [[ "$pg" == *"pg.demo"* ]]
+
+# the helper has to keep running on the bash 3.2 that macos ships at the only
+# bash path root owns, so bash 4 syntax in that file is a portability bug even
+# where it works.
+if grep -vE '^[[:space:]]*#' "$agent_secrets_helper" \
+     | grep -nE 'declare -A|local -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)'; then
+    echo "helper uses bash 4 syntax; it must stay bash 3.2 clean" >&2
+    exit 1
+fi
+
+secret-doctor > "$test_dir/doctor.out" || true
+grep -q 'agent-secrets doctor' "$test_dir/doctor.out"
+grep -q 'indexed' "$test_dir/doctor.out"
 
 echo "smoke test passed"

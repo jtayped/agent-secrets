@@ -16,6 +16,7 @@
 # attributes, and no values, so this is safe to run in any session -- the same
 # property the old catalog had, for the same reason.
 set -euo pipefail
+# shellcheck source-path=SCRIPTDIR
 source "$(dirname "${BASH_SOURCE[0]}")/secret-common.sh"
 
 usage() { echo "usage: pg-hosts [<server> | --scope <scope>]" >&2; exit 1; }
