@@ -19,7 +19,11 @@ cd agent-secrets
 the commands land in `~/.local/bin`. if that is not on your path, add it:
 
 ~~~bash
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"     # bash, zsh
+~~~
+
+~~~fish
+fish_add_path ~/.local/bin               # fish
 ~~~
 
 then check what your machine can do:

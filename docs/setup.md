@@ -13,6 +13,8 @@ cd agent-secrets
 export PATH="$HOME/.local/bin:$PATH"
 ~~~
 
+on fish, the last line is `fish_add_path ~/.local/bin` instead.
+
 the installer creates these directories with restrictive permissions:
 
 ~~~text
