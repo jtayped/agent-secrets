@@ -28,10 +28,10 @@ create a first scope with your normal editor:
 secret-edit example --new
 ~~~
 
-add plain .env entries, save, then inspect the value-free tree:
+add plain .env entries, save, then browse the scope without decrypting anything:
 
 ~~~bash
-secret-list example --tree
+secret-list example
 ~~~
 
 to make the decryption key root-owned and enable the approval gate as a real local control, run:
@@ -43,11 +43,45 @@ secret-helper-status
 
 the root step is optional for a first trial, but it is the setup worth keeping. [the setup guide](docs/setup.md) has the full sequence.
 
+## browsing
+
+`secret-list` works like `ls`. with no arguments it lists scopes; with a scope
+it shows that scope's top level; with a group it shows one level inside that
+group. nothing here decrypts a value.
+
+~~~text
+$ secret-list work
+work  (7 groups, 14 keys)
+
+  pg/             3 groups, 8 keys  postgres endpoints and roles
+  service/        1 group, 3 keys   third-party apis
+  ssh/            2 keys            host aliases
+
+  EDITOR_TOKEN                      personal editor token
+
+  go deeper with: secret-list work pg
+
+$ secret-list work pg.aws
+work:pg.aws  (1 group, 4 keys)  rds instances in eu-west-1
+
+  app/          2 keys            application role, read-write  [sensitive]
+
+  HOST
+  PORT
+~~~
+
+the count on each subgroup is what is underneath it, so you can tell whether a
+branch is worth opening before you open it.
+
+`--tree` still prints the whole subtree when you want it, and now takes a group
+so you can scope it: `secret-list work pg --tree`. `--keys` prints every
+variable name, one per line, for scripts.
+
 ## commands
 
 ~~~text
 secret-init
-secret-list [scope] [--tree]
+secret-list [scope] [group] [--tree | --keys]
 secret-edit scope [group | --new]
 secret-set scope group.path.key [--desc text] [--force]
 secret-approve scope --motive "short reason" group [group...]
