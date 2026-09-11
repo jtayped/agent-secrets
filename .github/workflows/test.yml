@@ -17,7 +17,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: install shellcheck
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
       - name: bash syntax
@@ -43,7 +43,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-22.04, macos-latest, macos-15-intel]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: install gnupg
         if: runner.os == 'macOS'
         run: brew list gnupg >/dev/null 2>&1 || brew install gnupg
