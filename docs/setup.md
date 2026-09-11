@@ -1,5 +1,9 @@
 # setup
 
+this is the install and hardening reference. if you are new, read
+[the user guide](guide.md) instead: it walks through actually using the tool
+and links back here when you are ready to lock the key down.
+
 ## 1. install the user commands
 
 ~~~bash
