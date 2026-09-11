@@ -44,10 +44,14 @@ clone the repository, then run:
 
 the installer puts commands in ~/.local/bin and its helper in ~/.local/libexec. it also creates ~/.secrets and a new key if one does not exist.
 
-make sure ~/.local/bin is on your path. for bash, add this to ~/.bashrc if needed:
+make sure ~/.local/bin is on your path:
 
 ~~~bash
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"     # bash, zsh, in ~/.bashrc or ~/.zshrc
+~~~
+
+~~~fish
+fish_add_path ~/.local/bin               # fish, once, and it persists
 ~~~
 
 create a first scope with your normal editor:
