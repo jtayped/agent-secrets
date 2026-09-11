@@ -94,4 +94,13 @@ doctor="$(secret-doctor 2>&1 || true)"
 grep -q 'first line of' <<< "$doctor" \
     || fail "secret-doctor did not report a key whose first line is empty"
 
+# a key this account cannot read, with no privileged helper to read it on your
+# behalf, means nothing can decrypt. reporting that as "root-owned, which is
+# the point" is how a broken store gets a clean bill of health.
+chmod 000 "$AGENT_SECRETS_DIR/key/.key"
+doctor="$(secret-doctor 2>&1 || true)"
+chmod 600 "$AGENT_SECRETS_DIR/key/.key"
+grep -q 'no root-owned helper to read it for you' <<< "$doctor" \
+    || fail "secret-doctor called an unreadable key fine while unhardened"
+
 echo "key test passed"
