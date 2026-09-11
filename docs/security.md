@@ -50,3 +50,19 @@ without the key, the encrypted scopes cannot be recovered. with both the key and
 ## before publishing a fork
 
 check that the repository has no .gpg files, .key files, .env files, local rclone configuration, ssh private keys, or scope indexes copied from a real store. the included .gitignore blocks common accidents, but it is not a substitute for reviewing git status.
+
+## if secret-doctor reports a weakened key
+
+`secret-init` used to write the key as 32 raw random bytes. gpg reads a
+passphrase file as text: it takes the first line and stops. about one key in
+eight contained a newline somewhere, and gpg silently used only the bytes
+before it — a newline at byte 10 left 80 bits of entropy where 256 was
+intended. keys are base64 now, which cannot contain a newline or a NUL, and
+`secret-doctor` reports an older key that is affected.
+
+**your scopes still open normally.** the key is weaker than intended, not
+broken, and nothing needs doing urgently. to move to a full-strength key, the
+shape of it is: decrypt every scope with the current key, generate a new one,
+re-encrypt each scope under it, and replace your key backup. do that with the
+old key still in hand until you have confirmed every scope opens under the new
+one.
