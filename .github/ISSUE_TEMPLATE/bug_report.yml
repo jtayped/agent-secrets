@@ -1,0 +1,31 @@
+name: bug report
+description: something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        do not paste a secret value, a decrypted scope, or the contents of `key/.key`.
+        `secret-doctor` is safe to paste: it prints no values.
+  - type: textarea
+    id: doctor
+    attributes:
+      label: secret-doctor output
+      description: run `secret-doctor` and paste the whole thing. it names your platform, versions and mode.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: what happened
+      description: the command you ran, what you expected, and what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: how to reproduce it
+      description: the smallest sequence that shows the problem. a scope with fake values is ideal.
+    validations:
+      required: false

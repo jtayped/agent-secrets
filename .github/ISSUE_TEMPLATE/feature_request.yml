@@ -1,0 +1,23 @@
+name: feature request
+description: suggest a change
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: the problem
+      description: what you were trying to do when you wanted this.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: what you have in mind
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: scope
+      options:
+        - label: i understand this is a single-user tool for one machine, not a shared secret manager
