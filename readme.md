@@ -111,6 +111,7 @@ secret-run scope [group] [--motive "short reason"] -- command [args...]
 secret-reindex [scope...]
 secret-doctor
 secret-update [--check]
+secret-rekey [--resume | --finish]
 pg-hosts [server | --scope scope]
 ssh-hosts [alias]
 secrets-bisync

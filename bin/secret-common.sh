@@ -75,7 +75,7 @@ secrets_index_dir="$secrets_dir/index"
 # shellcheck disable=SC2034
 readonly AGENT_SECRETS_STORE_FORMAT=1
 # the lowest helper protocol these wrappers can talk to.
-readonly AGENT_SECRETS_MIN_HELPER_PROTOCOL=3
+readonly AGENT_SECRETS_MIN_HELPER_PROTOCOL=4
 
 agent_secrets_self_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 

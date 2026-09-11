@@ -60,5 +60,7 @@ jobs:
         run: ./tests/format.sh
       - name: destructive paths and data loss
         run: ./tests/integrity.sh
+      - name: rekey must never strand a scope
+        run: ./tests/rekey.sh
       - name: upgrade must not touch the store
         run: ./tests/upgrade.sh
