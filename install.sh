@@ -80,6 +80,31 @@ case ":$PATH:" in
     *":$bin_dir:"*) ;;
     *) echo "add $bin_dir to your path before opening a new shell." ;;
 esac
+
+# an older copy of these commands earlier on PATH wins every lookup, and the
+# result is a mixed install: the commands that existed back then come from the
+# old copy, the ones added since come from this one. that is worse than either
+# version on its own, and nothing about it looks wrong until something behaves
+# like a version you are not reading. so say so, loudly, and name the files.
+shadowed=""
+for command in "$bin_dir"/secret-* "$bin_dir"/pg-hosts "$bin_dir"/ssh-hosts; do
+    [[ -e "$command" ]] || continue
+    name="${command##*/}"
+    found="$(command -v "$name" 2>/dev/null || true)"
+    [[ -n "$found" && "$found" != "$command" ]] && shadowed="$shadowed  $found
+"
+done
+if [[ -n "$shadowed" ]]; then
+    echo
+    echo "warning: these copies come earlier on your path and will be used instead:"
+    printf "$shadowed"
+    echo
+    echo "  they are from an older install. running a mix of the two is worse than"
+    echo "  running either, because the commands that existed back then come from the"
+    echo "  old copy and the rest come from this one."
+    echo
+    echo "  delete them, or put $bin_dir earlier on your path."
+fi
 echo "installed agent-secrets $version under $bin_dir"
 echo "run secret-edit example --new to create your first encrypted scope"
 echo "run secret-doctor to see what this machine supports"
