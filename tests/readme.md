@@ -51,6 +51,14 @@ merely looks reassuring. if you change that guard, check the mutation still
 trips it — a mutation test that no longer mutates anything passes silently, so
 the test fails loudly when its `sed` pattern stops matching.
 
+**run the suite on every platform you claim to support.** `integrity.sh` passed
+on linux and failed on both macos runners the first time it ran, because
+`render_excluding` passed a multi-line list to `awk -v` and the awk on macos
+rejects that. the awk was inside a process substitution, so its exit status
+went nowhere and `secret-edit <scope> <group>` quietly wrote back a scope
+containing only the group that had just been edited. a linux-only suite would
+have called that green.
+
 **a destructive operation deserves a before-and-after fingerprint**, not a spot
 check. `upgrade.sh` cksums every file in the store and diffs the whole list,
 because "the value i looked at is still there" and "nothing was lost" are

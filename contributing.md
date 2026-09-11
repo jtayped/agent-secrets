@@ -15,6 +15,13 @@ promise in docs/updating.md that an upgrade replaces code and never touches a
 stored secret. a change that makes one of those fail is wrong until proven
 otherwise; do not adjust the test to match the change.
 
+never pass a multi-line value to `awk -v`. the awk that ships with macos
+rejects a newline inside a `-v` assignment, and if the awk runs inside a
+process substitution nobody sees the exit status, so the whole pipeline just
+produces nothing. that is how `secret-edit <scope> <group>` came to delete every
+other group on every mac. pass lists on stdin or as a file; keep `-v` for single
+values.
+
 run the root installer only on a disposable test account or your own machine. it writes to /usr/local/libexec and /etc/sudoers.d.
 
 keep command output and prose lowercase. uppercase remains where an external format requires it, including .env variable names, systemd directive names, and environment variable names.
