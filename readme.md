@@ -1,10 +1,22 @@
 # agent-secrets
 
-a small bash tool for encrypted .env scopes.
+a small bash tool for encrypted .env scopes, meant for working next to coding agents.
 
-it keeps each scope in one gpg-encrypted file, with a separate 32-byte key. commands can list group and key metadata without decrypting anything. a root-owned helper can require a local desktop approval before a sensitive group reaches an editor or child process.
+each scope is one gpg-encrypted file with a separate key. commands read group and key names without decrypting anything. a root-owned helper can ask for a local desktop approval before a group you marked sensitive reaches an editor or a child process.
 
-this is aimed at one person on one machine. it is not a shared secret manager and it does not replace backups, access controls, or a review of the command that will receive a secret.
+## what this is, and what it is not
+
+this tool shapes how an agent reaches a secret. it does not stop one that decides to take it.
+
+read that again before you rely on it, because the difference is the whole point.
+
+**what it does.** secrets sit encrypted instead of in plaintext .env files an agent trips over while grepping the repo. values go into the environment of a child process, and no command here prints one to stdout, so a secret does not land in your transcript just because an agent needed it. an agent can browse group names, key names and descriptions without decrypting anything, so it can work out what exists without touching a value. a command receives one group rather than the whole store. groups you mark sensitive open a prompt naming what was asked for and why, and every verdict goes to the system journal.
+
+**what it does not do.** it does not stop an agent that wants the value. the agent can run `secret-run <scope> <group> -- curl ...` against any group you did not mark sensitive, and nothing prompts you. it does not stop an agent from rewriting the commands, either. `~/.local/bin/secret-run` belongs to your account, and while the root-owned helper cannot be replaced, the thing that calls it can. before the root install it protects nothing at all, since your account can read the key file and so can anything running as you. and it does not help once you approve a prompt. an approval lasts fifteen minutes by default and the group stays readable for all of it.
+
+what you get is hygiene and visibility rather than containment. the careless path becomes safe and the deliberate path becomes noisy. an agent acting in bad faith with your privileges still wins, and no amount of work on this tool changes that. if you need an agent to be unable to reach a credential, do not give it to a process running as you. run the agent as another user, or keep the credential on another machine.
+
+this is for one person on one machine. it is not a shared secret manager, and it does not replace backups or reading the command you are about to hand a secret to.
 
 ## install
 
@@ -34,7 +46,7 @@ add plain .env entries, save, then browse the scope without decrypting anything:
 secret-list example
 ~~~
 
-to make the decryption key root-owned and enable the approval gate as a real local control, run:
+to put the key out of reach of your own account, so that reading a sensitive group needs an approval rather than a file read, run:
 
 ~~~bash
 sudo ~/.local/libexec/agent-secrets-install-root
@@ -153,4 +165,4 @@ including the one caveat that keeps hardened mode off most macs.
 - rclone is optional and only used by secrets-bisync.
 - the tool does not store values in this repository.
 
-read [security.md](docs/security.md) before trusting the root install. the honest limits matter here.
+[security.md](docs/security.md) goes through the limits again in more detail. read it before you decide how much to trust this with.
