@@ -75,8 +75,17 @@ intended. keys are base64 now, which cannot contain a newline or a NUL, and
 `secret-doctor` reports an older key that is affected.
 
 **your scopes still open normally.** the key is weaker than intended, not
-broken, and nothing needs doing urgently. to move to a full-strength key, the
-shape of it is: decrypt every scope with the current key, generate a new one,
-re-encrypt each scope under it, and replace your key backup. do that with the
-old key still in hand until you have confirmed every scope opens under the new
-one.
+broken, and nothing needs doing urgently. when you want to move to a
+full-strength key:
+
+~~~bash
+secret-rekey
+~~~
+
+it re-encrypts every scope under a newly generated key, reading each one back
+and comparing it before replacing anything. the old key stays at
+~/.secrets/key/.key.old the whole time, so an interrupted or regretted rekey is
+recoverable. check a value, put the new key wherever you keep the old one, then
+run `secret-rekey --finish` to delete the previous key. if a rekey is
+interrupted part way, `secret-rekey --resume` finishes it with the keys already
+on disk.

@@ -7,6 +7,7 @@ not by which function it lives in.
 | file | guards | a failure here means |
 |---|---|---|
 | `key.sh` | the key | the one thing with no recovery path. if it is weak or wrong, every scope is affected at once and nothing else in this list matters. |
+| `rekey.sh` | changing the key | a rekey that strands a scope under a key you no longer have. |
 | `integrity.sh` | the destructive paths | a bug that makes the store **shorter** rather than wrong. |
 | `format.sh` | the scope format | a save that silently changes or drops what you stored. |
 | `upgrade.sh` | upgrades | an upgrade that touches a store instead of only replacing code. |
