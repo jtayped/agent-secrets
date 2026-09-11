@@ -4,7 +4,7 @@ a small bash tool for encrypted .env scopes.
 
 it keeps each scope in one gpg-encrypted file, with a separate 32-byte key. commands can list group and key metadata without decrypting anything. a root-owned helper can require a local desktop approval before a sensitive group reaches an editor or child process.
 
-this is aimed at one person on one linux machine. it is not a shared secret manager and it does not replace backups, access controls, or a review of the command that will receive a secret.
+this is aimed at one person on one machine. it is not a shared secret manager and it does not replace backups, access controls, or a review of the command that will receive a secret.
 
 ## install
 
@@ -53,6 +53,7 @@ secret-set scope group.path.key [--desc text] [--force]
 secret-approve scope --motive "short reason" group [group...]
 secret-run scope [group] [--motive "short reason"] -- command [args...]
 secret-reindex [scope...]
+secret-doctor
 pg-hosts [server | --scope scope]
 ssh-hosts [alias]
 secrets-bisync
@@ -84,10 +85,19 @@ back up scopes/ and key/.key separately. do not put key/ in a broad sync folder 
 
 [skills/secrets/SKILL.md](skills/secrets/SKILL.md) is a portable skill file for coding agents. copy it into the agent's skill directory after installing the commands. it tells an agent how to discover metadata, narrow a group, and avoid printing values.
 
+## platforms
+
+linux and macos are supported. windows is supported through wsl2 and not
+natively, because the protection here is posix file ownership plus sudo plus a
+root-owned helper, and a git-bash install would report success while protecting
+nothing.
+
+run `secret-doctor` to see exactly what your machine can do and what it is
+missing. [compatibility.md](docs/compatibility.md) has the full matrix,
+including the one caveat that keeps hardened mode off most macs.
+
 ## notes
 
-- linux is required for the hardening step.
-- gpg, sudo, setpriv, and kdialog are needed for the full approval flow.
 - the approval dialog only works from an active, unlocked local desktop session.
 - rclone is optional and only used by secrets-bisync.
 - the tool does not store values in this repository.

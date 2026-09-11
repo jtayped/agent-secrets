@@ -2,10 +2,59 @@
 # shared paths and helper lookup for the secret commands. source this file,
 # never run it directly.
 
+# ---------------------------------------------------------------------------
+# Platform layer
+#
+# The same handful of functions exist in lib/agent-secrets-helper. That copy is
+# deliberate: the helper runs as root through sudo and must never source a file
+# this account can write, so there is no shared portable.sh to point both at.
+# Keep the two in step when you change either.
+
+agent_secrets_os="$(uname -s)"
+case "$agent_secrets_os" in
+    Linux|Darwin) ;;
+    CYGWIN*|MINGW*|MSYS*)
+        echo "error: windows is not supported natively. run agent-secrets inside wsl2." >&2
+        exit 1 ;;
+    *)
+        echo "error: unsupported platform: $agent_secrets_os (linux and macos only)" >&2
+        exit 1 ;;
+esac
+
+stat_owner() {
+    if [[ "$agent_secrets_os" == Darwin ]]; then stat -f '%Su:%Sg %Lp' -- "$1"
+    else stat -c '%U:%G %a' -- "$1"; fi
+}
+
+sha256_of_stdin() {
+    if [[ "$agent_secrets_os" == Darwin ]]; then shasum -a 256; else sha256sum; fi | cut -d' ' -f1
+}
+
+# Overwriting before unlinking is close to meaningless on a copy-on-write or
+# flash-translated filesystem, which is most of them now. It still costs
+# nothing, and it keeps the plaintext out of a file that a later `undelete`
+# would hand back whole.
+secure_rm() {
+    local f="$1"
+    [[ -e "$f" ]] || return 0
+    if command -v shred >/dev/null 2>&1; then
+        shred -u -- "$f" 2>/dev/null && return 0
+    fi
+    if [[ "$agent_secrets_os" == Darwin ]]; then
+        rm -P -f -- "$f" 2>/dev/null && return 0
+    fi
+    rm -f -- "$f"
+}
+
+# every one of these is read by the commands that source this file, which a
+# static linter cannot see from here.
+# shellcheck disable=SC2034
 secrets_dir="${AGENT_SECRETS_DIR:-$HOME/.secrets}"
+# shellcheck disable=SC2034
 secrets_key_dir="$secrets_dir/key"
 secrets_key="$secrets_key_dir/.key"
 secrets_scopes_dir="$secrets_dir/scopes"
+# shellcheck disable=SC2034
 secrets_index_dir="$secrets_dir/index"
 
 # the local helper makes the first setup usable without sudo. after the root

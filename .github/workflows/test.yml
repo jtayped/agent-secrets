@@ -2,16 +2,53 @@ name: test
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  smoke:
+  lint:
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: install test dependencies
-        run: sudo apt-get update && sudo apt-get install --yes gnupg ripgrep
-      - name: check shell syntax
+      - name: install shellcheck
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+      - name: bash syntax
         run: bash -n install.sh install-root.sh lib/agent-secrets-helper bin/* tests/smoke.sh
-      - name: run smoke test
+      - name: shellcheck
+        run: |
+          shellcheck -x -S warning \
+            install.sh install-root.sh lib/agent-secrets-helper \
+            bin/secret-* bin/pg-hosts bin/ssh-hosts bin/secrets-bisync \
+            tests/smoke.sh
+
+  test:
+    # macos-latest is apple silicon and macos-13 is intel; between them they
+    # cover both homebrew prefixes. both also run the helper under the stock
+    # /bin/bash 3.2, which is the only bash on a mac that root actually owns,
+    # so these jobs are what keep this codebase honest about bash 4 syntax.
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04, macos-latest, macos-13]
+    steps:
+      - uses: actions/checkout@v4
+      - name: install gnupg
+        if: runner.os == 'macOS'
+        run: brew list gnupg >/dev/null 2>&1 || brew install gnupg
+      - name: report the platform
+        run: |
+          uname -a
+          /bin/bash --version | head -1
+          gpg --version | head -1
+      - name: smoke test
         run: ./tests/smoke.sh
