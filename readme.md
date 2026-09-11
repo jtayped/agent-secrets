@@ -28,6 +28,12 @@ back the key up separately, by hand, once. a scope without it cannot be recovere
 
 one caveat worth knowing before you point this at a cloud drive. `index/` is plaintext. it holds no values, but it does hold group names, key names and the descriptions you wrote, so syncing it publishes an inventory of which credentials you have and what they are for. set `AGENT_SECRETS_SYNC_INDEX=0` to sync only the ciphertext. `secret-reindex` rebuilds the index on the other machine.
 
+## start here
+
+new to this? [the user guide](docs/guide.md) is a ten minute walkthrough: make
+a scope, put a secret in it, find it again a week later, and hand it to a
+command without it appearing on your screen.
+
 ## install
 
 clone the repository, then run:
