@@ -18,6 +18,16 @@ what you get is hygiene and visibility rather than containment. the careless pat
 
 this is for one person on one machine. it is not a shared secret manager, and it does not replace backups or reading the command you are about to hand a secret to.
 
+## why it is encrypted at all
+
+not to stop a local process. a local process asks the helper and gets what it asks for.
+
+the encryption is for the copies that leave this machine. each scope is one self-contained gpg file, so `scopes/` can go to google drive, dropbox, a private git repo, an rclone remote or a usb stick without its contents going too. the key sits in its own directory for exactly this reason: you sync `scopes/` and leave `key/` behind. `secrets-bisync` does that, and nothing here ever puts `key/` in a sync target.
+
+back the key up separately, by hand, once. a scope without it cannot be recovered, and that is the intended property rather than a gap.
+
+one caveat worth knowing before you point this at a cloud drive. `index/` is plaintext. it holds no values, but it does hold group names, key names and the descriptions you wrote, so syncing it publishes an inventory of which credentials you have and what they are for. set `AGENT_SECRETS_SYNC_INDEX=0` to sync only the ciphertext. `secret-reindex` rebuilds the index on the other machine.
+
 ## install
 
 clone the repository, then run:
