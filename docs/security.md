@@ -1,14 +1,28 @@
 # security
 
-this tool protects a local encrypted store. it has sharp limits.
+this tool shapes how a process reaches a secret. it does not contain a process that has decided to take one. the readme says this at the top and it is worth repeating here, because everything below is only meaningful inside that limit.
+
+## what it actually buys you
+
+values never reach stdout. every command hands a group to a child process through its environment instead of printing it, so a secret does not end up in a terminal transcript, a log, or an agent's context just because something needed it.
+
+names are readable without values. groups, key names, descriptions and sensitivity marks live in a plaintext index, so a process can work out what exists without decrypting anything.
+
+a command gets one group rather than the whole store, and a group you marked sensitive costs a prompt and a journal entry.
+
+that is real, and it is also the whole of it.
 
 ## what the root install changes
 
-before the root install, your account owns ~/.secrets/key/.key. any program that runs as you can read it or replace the local helper. the approval dialog catches mistakes, but it cannot stop a hostile process.
+before the root install, your account owns ~/.secrets/key/.key. any program running as you can read it, decrypt every scope with bare gpg, and never touch this tool. the approval dialog catches mistakes. it stops nothing.
 
-after the root install, root owns both the installed helper and the key. a process running as you cannot decrypt a scope directly. it can invoke the helper through its narrow sudo rule, but the helper validates scope and group names, checks the encrypted metadata, and asks for local approval before a sensitive group is released.
+after the root install, root owns the installed helper and the key. a process running as you cannot decrypt a scope by reading a file. it has to go through the helper, which validates scope and group names, reads sensitivity from the encrypted metadata rather than the writable index, and asks for local approval before releasing a sensitive group.
 
-approval is a local consent check. after you approve, the selected process receives the selected values. read the exact command before approving it.
+what that does not give you: a process running as you can still call `secret-run` on any group you did not mark sensitive and pipe the value wherever it likes, with no prompt. it can also rewrite the unprivileged commands in ~/.local/bin, which your account owns. root owns the helper, but not the thing that calls it.
+
+so mark the groups that matter as sensitive, and treat everything else as readable by anything running as you. if you need a credential to be out of reach of a process on this machine, do not put it on this machine.
+
+approval is a consent check, not an authorisation check. after you approve, the process you approved receives the values, and so does anything that process runs. read the command before approving it.
 
 ## the approval gate
 
@@ -56,7 +70,7 @@ check that the repository has no .gpg files, .key files, .env files, local rclon
 `secret-init` used to write the key as 32 raw random bytes. gpg reads a
 passphrase file as text: it takes the first line and stops. about one key in
 eight contained a newline somewhere, and gpg silently used only the bytes
-before it — a newline at byte 10 left 80 bits of entropy where 256 was
+before it. a newline at byte 10 left 80 bits of entropy where 256 was
 intended. keys are base64 now, which cannot contain a newline or a NUL, and
 `secret-doctor` reports an older key that is affected.
 
