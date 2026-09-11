@@ -30,16 +30,18 @@ jobs:
             tests/smoke.sh
 
   test:
-    # macos-latest is apple silicon and macos-13 is intel; between them they
-    # cover both homebrew prefixes. both also run the helper under the stock
-    # /bin/bash 3.2, which is the only bash on a mac that root actually owns,
-    # so these jobs are what keep this codebase honest about bash 4 syntax.
+    # macos-latest is apple silicon and macos-15-intel is x86_64; between them
+    # they cover both homebrew prefixes, /opt/homebrew and /usr/local, which is
+    # the difference that decides whether hardening is available at all. both
+    # also run the helper under the stock /bin/bash 3.2, the only bash on a mac
+    # that root owns, so these jobs are what keep this file honest about bash 4
+    # syntax.
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04, macos-latest, macos-13]
+        os: [ubuntu-latest, ubuntu-22.04, macos-latest, macos-15-intel]
     steps:
       - uses: actions/checkout@v4
       - name: install gnupg
