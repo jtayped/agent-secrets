@@ -42,14 +42,35 @@ stat_mode()      { if [[ "$os" == Darwin ]]; then stat -f '%Lp' -- "$1"; else st
 
 # root owns this path and every directory above it, and nobody else can write
 # any of them.
+#
+# A symlink's own permission bits are always 0777 and the kernel ignores them:
+# access follows the target, and repointing the link needs write permission on
+# the directory holding it, which this walk checks on the way up. Reading that
+# 0777 as world-writable is what made /bin/bash fail on every usr-merged
+# distribution, so a symlink is checked for ownership, its mode is skipped, and
+# its target is walked as well.
 path_is_trusted() {
-    local p="$1" owner mode
+    _trusted_walk "$1" 0
+}
+
+_trusted_walk() {
+    local p="$1" depth="$2" owner mode link
+    (( depth > 64 )) && return 1
     [[ -e "$p" ]] || return 1
     while :; do
         owner="$(stat_owner_uid "$p" 2>/dev/null)" || return 1
-        mode="$(stat_mode "$p" 2>/dev/null)" || return 1
         [[ "$owner" == 0 ]] || return 1
-        (( (8#$mode & 8#022) == 0 )) || return 1
+        if [[ -L "$p" ]]; then
+            link="$(readlink "$p" 2>/dev/null)" || return 1
+            case "$link" in
+                /*) ;;
+                *) link="$(dirname -- "$p")/$link" ;;
+            esac
+            _trusted_walk "$link" "$((depth + 1))" || return 1
+        else
+            mode="$(stat_mode "$p" 2>/dev/null)" || return 1
+            (( (8#$mode & 8#022) == 0 )) || return 1
+        fi
         [[ "$p" == "/" ]] && return 0
         p="$(dirname -- "$p")"
     done
