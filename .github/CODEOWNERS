@@ -1,0 +1,8 @@
+# every change needs the owner's eyes. the privileged half especially: sudoers
+# rules, the root-owned helper and the approval gate are where a mistake stops
+# being a bug and starts being a hole.
+*                           @jtayped
+/lib/agent-secrets-helper   @jtayped
+/install-root.sh            @jtayped
+/migrations/                @jtayped
+/docs/security.md           @jtayped
