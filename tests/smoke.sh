@@ -173,6 +173,36 @@ printf 'loose' | secret-set gated LOOSE_KEY --desc "outside every group" >/dev/n
 secret-list gated --keys | grep -qx 'LOOSE_KEY'
 rm -rf "$gate_cache"
 
+# `ask` refuses an existing key before it opens a dialog, not after. this is the
+# one branch of the verb the suite can reach: everything past it waits on
+# someone typing into a prompt, and ci has nobody to do that.
+if out="$(secret-ask gated pg.one.ro.PASS --desc "already there" 2>&1)"; then
+    echo "expected secret-ask to refuse an existing key" >&2
+    exit 1
+fi
+[[ "$out" == *"already exists"* ]]
+[[ "$out" == *"--force"* ]]
+
+# and it refuses a destination that could never work before asking too.
+if out="$(secret-ask gated 'not a path' 2>&1)"; then
+    echo "expected secret-ask to refuse a malformed path" >&2
+    exit 1
+fi
+
+# the gate runs before the dialog, so a refused write is refused before anyone
+# is asked to type a credential that was never going to be stored.
+deny_cached gated pg.one.rw
+if out="$(secret-ask gated pg.one.rw.NEWPASS --desc "new" 2>&1)"; then
+    echo "expected secret-ask to refuse a gated destination" >&2
+    exit 1
+fi
+[[ "$out" == *"denied"* ]]
+if secret-list gated --keys | grep -qx 'PG_ONE_RW_NEWPASS'; then
+    echo "a refused ask must not store anything" >&2
+    exit 1
+fi
+rm -rf "$gate_cache"
+
 # --all-groups still reaches ungrouped keys, which is the whole point of keeping
 # it. demo carries no sensitive mark, so this clears no gate and needs no session.
 #

@@ -167,6 +167,28 @@ works the same way:
 openssl rand -base64 32 | secret-set work service.api_token --desc "internal api"
 ~~~
 
+### when someone else has to supply the value
+
+piping works when the value is on the machine already. it is the wrong shape
+when a person has to hand it over, because the obvious thing to do with a
+command someone gives you is to paste the credential into it — and then it is
+in your shell history, and in the transcript of whoever wrote the command.
+
+`secret-ask` names the destination and asks for the value in a dialog instead:
+
+~~~bash
+secret-ask work stripe.secret_key --desc "live secret key"
+~~~
+
+a masked prompt opens on your screen showing the scope, the variable name and
+the description. what you type goes from the dialog into the encrypted store
+without passing through the command line, the shell, or the process that ran
+the command. an agent can write this one out for you to run; it learns only
+that the value was stored.
+
+it refuses an existing key before asking rather than after, so you are never
+asked to retype something only to be told it was already there.
+
 the dotted path becomes the variable name. `work stripe.secret_key` writes
 `STRIPE_SECRET_KEY` into the `stripe` group. it refuses to overwrite something
 that already exists:

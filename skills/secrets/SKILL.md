@@ -48,11 +48,21 @@ approval exit codes:
 
 ## adding a secret
 
-pipe the value on stdin. never put it in a flag or an argument: that lands in `ps`, in shell history, and in this transcript.
+if the value can be generated or is already on the machine, pipe it on stdin. never put it in a flag or an argument: that lands in `ps`, in shell history, and in this transcript.
 
 ~~~bash
 openssl rand -base64 32 | secret-set <scope> <group.path.KEY> --desc "what it is for"
 ~~~
+
+**if joel has to supply the value himself, use `secret-ask` instead of handing him a `secret-set` command to paste into.** a pasted credential ends up in his shell history and in this transcript, which is the thing the store exists to avoid.
+
+~~~bash
+secret-ask <scope> <group.path.KEY> --desc "what it is for"
+~~~
+
+this opens a masked dialog on his screen showing the scope, the variable name and the description. the value goes from the dialog into the encrypted store without passing through the command line or this session. you learn only that it was stored. it refuses an existing key before asking rather than after; pass `--force` to replace one deliberately.
+
+either way the group path matters as much as the value:
 
 ### pick the group before you write
 
