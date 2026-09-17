@@ -93,7 +93,7 @@ if [[ "$os" == Linux ]]; then
         offer_zenity "a dialog tool is required to approve access to a sensitive group."
     elif ! command -v zenity >/dev/null; then
         echo "note: zenity is not installed, so secret-ask asks for one credential at a time."
-        offer_zenity "zenity has a multi-field form, so a whole set of credentials is asked for in one dialog. kdialog has none, and is used for approvals either way."
+        offer_zenity "zenity has a multi-field form, so a whole set of credentials is asked for in one dialog. it would also take over the approval dialog, because one toolkit draws all of them: installing it changes how those look."
     fi
 fi
 
