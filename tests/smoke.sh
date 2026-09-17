@@ -23,6 +23,19 @@ SERVICE_API_TOKEN=first-value
 #@a kind=endpoint
 #@g pg.demo  test database endpoint
 PG_DEMO_HOST=db.test
+
+#@a kind=role
+#@a mode=ro
+#@g pg.demo.ro  demo_ro: read-only, default choice for reads.
+PG_DEMO_RO_USER=demo_ro
+PG_DEMO_RO_PASS=ro-value
+
+#@sensitive
+#@a kind=role
+#@a mode=rw
+#@g pg.demo.rw  demo_rw: read-write.
+PG_DEMO_RW_USER=demo_rw
+PG_DEMO_RW_PASS=rw-value
 scope
 secret-reindex demo >/dev/null
 
@@ -90,8 +103,27 @@ fi
 result="$(secret-run demo service -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')"
 [[ "$result" == "first-value" ]]
 
-# the whole scope stays valid: it is the only thing that reaches ungrouped keys.
-secret-run demo -- true
+# a run naming no group is refused, and the refusal has to be useful: it names
+# the whole-scope form rather than just rejecting, and points at the ungated
+# read-only role, which is what the caller almost always actually wanted.
+if out="$(secret-run demo -- true 2>&1)"; then
+    echo "expected secret-run to refuse a run that names no group" >&2
+    exit 1
+fi
+[[ "$out" == *"names no group"* ]]
+[[ "$out" == *"--all-groups"* ]]
+[[ "$out" == *"pg.demo.ro"* ]]
+[[ "$out" == *"default choice for reads"* ]]
+# the gated group is counted, and the sensitive one is never offered as a hint.
+[[ "$out" == *"1 sensitive group"* ]]
+[[ "$out" != *"pg.demo.rw"* ]]
+
+# --all-groups still reaches ungrouped keys, which is the whole point of keeping it.
+secret-run demo --all-groups -- true
+
+# an ungated read-only role costs no dialog, which is why the hint points there.
+result="$(secret-run demo pg.demo.ro -- bash -c 'printf "%s" "$PG_DEMO_RO_USER"')"
+[[ "$result" == "demo_ro" ]]
 
 printf 'second-value' | secret-set demo service.api.second --desc "test second value" >/dev/null
 secret-list demo --keys | grep -qx 'SERVICE_API_SECOND'
