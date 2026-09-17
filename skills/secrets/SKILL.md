@@ -25,7 +25,9 @@ use the narrowest group that the task needs:
 secret-run <scope> <group> -- <command> [args...]
 ~~~
 
-a command without a group receives every value in the scope. do not use that form unless the task needs the whole scope.
+a command without a group receives every value in the scope. do not use that form unless the task needs the whole scope. it is also the only form that reaches keys sitting outside any group, and it has to clear every sensitive group in the scope to do so, so a scope with ungrouped keys asks for approvals the task has nothing to do with. group the keys instead.
+
+a group that does not exist is an error, not an empty environment. if `secret-run` says `no group '<path>'`, browse with `secret-list` rather than falling back to the whole scope.
 
 never print values. do not run secret-run with env, printenv, set, or a command that logs its environment. do not read the key or decrypt a scope directly.
 

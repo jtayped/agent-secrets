@@ -61,6 +61,38 @@ subtree="$(secret-list demo service --tree)"
 result="$(secret-run demo service.api -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')"
 [[ "$result" == "first-value" ]]
 
+# a group path that parses but names nothing has to be an error, not an empty
+# environment. secret-list has always rejected one; secret-run used to hand the
+# command no values and exit 0, so the failure surfaced wherever the command
+# happened to need the credential and looked nothing like a wrong group name.
+for bad in nope service.nope pg.demo.nope; do
+    if out="$(secret-run demo "$bad" -- true 2>&1)"; then
+        echo "expected secret-run to reject unknown group '$bad'" >&2
+        exit 1
+    fi
+    [[ "$out" == *"no group '$bad'"* ]] || {
+        echo "secret-run rejected '$bad' without naming it: $out" >&2
+        exit 1
+    }
+done
+
+# this doubles as the regression test for secret-approve's exit status: it used
+# to read $? after a bare `if`, which is 0 whenever the condition failed, so
+# every failure including a denial was reported to the caller as success.
+if out="$(secret-approve demo --motive "test." service.nope 2>&1)"; then
+    echo "expected secret-approve to reject an unknown group" >&2
+    exit 1
+fi
+[[ "$out" == *"no group 'service.nope'"* ]]
+
+# an ancestor nobody declared still selects its descendants, because render()
+# accepts it. tightening the check to declared paths only would break this.
+result="$(secret-run demo service -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')"
+[[ "$result" == "first-value" ]]
+
+# the whole scope stays valid: it is the only thing that reaches ungrouped keys.
+secret-run demo -- true
+
 printf 'second-value' | secret-set demo service.api.second --desc "test second value" >/dev/null
 secret-list demo --keys | grep -qx 'SERVICE_API_SECOND'
 ! grep -qF 'first-value' "$AGENT_SECRETS_DIR/index/demo.toc"
