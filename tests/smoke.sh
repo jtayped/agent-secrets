@@ -29,13 +29,6 @@ PG_DEMO_HOST=db.test
 #@g pg.demo.ro  demo_ro: read-only, default choice for reads.
 PG_DEMO_RO_USER=demo_ro
 PG_DEMO_RO_PASS=ro-value
-
-#@sensitive
-#@a kind=role
-#@a mode=rw
-#@g pg.demo.rw  demo_rw: read-write.
-PG_DEMO_RW_USER=demo_rw
-PG_DEMO_RW_PASS=rw-value
 scope
 secret-reindex demo >/dev/null
 
@@ -106,19 +99,48 @@ result="$(secret-run demo service -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')
 # a run naming no group is refused, and the refusal has to be useful: it names
 # the whole-scope form rather than just rejecting, and points at the ungated
 # read-only role, which is what the caller almost always actually wanted.
-if out="$(secret-run demo -- true 2>&1)"; then
+#
+# this needs a scope with a sensitive group to count, and the refusal happens
+# before the gate, so no dialog is ever reached. it lives in its own scope
+# because `demo` is what the --all-groups case runs, and that one does gate:
+# ci has no session to answer a dialog with.
+"$agent_secrets_helper" encrypt gated > "$AGENT_SECRETS_DIR/scopes/gated.env.gpg" <<'scope'
+#@a kind=role
+#@a mode=ro
+#@g pg.one.ro  one_ro: read-only, default choice for reads.
+PG_ONE_RO_USER=one_ro
+
+#@sensitive
+#@a kind=role
+#@a mode=rw
+#@g pg.one.rw  one_rw: read-write.
+PG_ONE_RW_USER=one_rw
+scope
+secret-reindex gated >/dev/null
+
+if out="$(secret-run gated -- true 2>&1)"; then
     echo "expected secret-run to refuse a run that names no group" >&2
     exit 1
 fi
 [[ "$out" == *"names no group"* ]]
 [[ "$out" == *"--all-groups"* ]]
-[[ "$out" == *"pg.demo.ro"* ]]
+[[ "$out" == *"pg.one.ro"* ]]
 [[ "$out" == *"default choice for reads"* ]]
-# the gated group is counted, and the sensitive one is never offered as a hint.
+# the gated group is counted, and a sensitive group is never offered as a hint.
 [[ "$out" == *"1 sensitive group"* ]]
-[[ "$out" != *"pg.demo.rw"* ]]
+[[ "$out" != *"pg.one.rw"* ]]
 
-# --all-groups still reaches ungrouped keys, which is the whole point of keeping it.
+# --all-groups still reaches ungrouped keys, which is the whole point of keeping
+# it. demo carries no sensitive mark, so this clears no gate and needs no session.
+#
+# that last part is load-bearing and easy to undo by accident: adding a
+# #@sensitive group to the demo fixture makes the next line ask for a dialog,
+# which ci has no session to answer, and the failure it produces (exit 69)
+# names the gate rather than the fixture. so check the fixture, not the symptom.
+if [[ "$(secret-list demo --tree | grep -c '\[sensitive\]')" != "0" ]]; then
+    echo "the demo fixture must carry no sensitive group: --all-groups runs against it" >&2
+    exit 1
+fi
 secret-run demo --all-groups -- true
 
 # an ungated read-only role costs no dialog, which is why the hint points there.
