@@ -10,7 +10,7 @@ this tool shapes how an agent reaches a secret. it does not stop one that decide
 
 read that again before you rely on it, because the difference is the whole point.
 
-**what it does.** secrets sit encrypted instead of in plaintext .env files an agent trips over while grepping the repo. values go into the environment of a child process, and no command here prints one to stdout, so a secret does not land in your transcript just because an agent needed it. an agent can browse group names, key names and descriptions without decrypting anything, so it can work out what exists without touching a value. a command receives one group rather than the whole store. groups you mark sensitive open a prompt naming what was asked for and why, and every verdict goes to the system journal.
+**what it does.** secrets sit encrypted instead of in plaintext .env files an agent trips over while grepping the repo. values go into the environment of a child process, and no command here prints one to stdout, so a secret does not land in your transcript just because an agent needed it. an agent can browse group names, key names and descriptions without decrypting anything, so it can work out what exists without touching a value. a command receives the groups it names rather than the whole store. groups you mark sensitive open a prompt naming what was asked for and why, and every verdict goes to the system journal.
 
 **what it does not do.** it does not stop an agent that wants the value. the agent can run `secret-run <scope> <group> -- curl ...` against any group you did not mark sensitive, and nothing prompts you. it does not stop an agent from rewriting the commands, either. `~/.local/bin/secret-run` belongs to your account, and while the root-owned helper cannot be replaced, the thing that calls it can. before the root install it protects nothing at all, since your account can read the key file and so can anything running as you. and it does not help once you approve a prompt. an approval lasts fifteen minutes by default and the group stays readable for all of it.
 
@@ -118,7 +118,7 @@ secret-edit scope [group | --new]
 secret-set scope group.path.key [--desc text] [--force]
 secret-ask scope group.path.key [--desc text] [group.path.key [--desc text]]... [--force]
 secret-approve scope --motive "short reason" group [group...]
-secret-run scope (group | --all-groups) [--motive "short reason"] -- command [args...]
+secret-run scope (group [group...] | --all-groups) [--motive "short reason"] -- command [args...]
 secret-reindex [scope...]
 secret-doctor
 secret-update [--check]
@@ -133,6 +133,13 @@ use secret-run to give a command only the group it needs:
 
 ~~~bash
 secret-run example service.api -- curl -fsS https://api.example.test/me
+~~~
+
+name several groups when the job needs several. the gate is the union of what
+those groups carry, so it is still one dialog and still not the whole scope:
+
+~~~bash
+secret-run example service.api service.access -- curl -fsS https://api.example.test/me
 ~~~
 
 never use it with env, printenv, set, or another command whose job is to print the environment.

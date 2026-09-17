@@ -27,13 +27,21 @@ secret-run <scope> <group> -- <command> [args...]
 
 the group is required. a run that names none is refused, because without one the command receives every value in the scope and the gate has to clear every sensitive group in it to hand them over. the refusal lists the read-only roles you could have used instead. if the task really does need the whole scope, say so with `--all-groups` — it is the only form that reaches keys sitting outside any group.
 
+when the values the command needs live in more than one group, name them all in one run. they do not have to be one subtree:
+
+~~~bash
+secret-run <scope> <group> <group> [<group>...] -- <command> [args...]
+~~~
+
+the command gets those groups and nothing else, and the gate is the union of what they carry, so several groups still cost at most one dialog. **do not nest one `secret-run` inside another to combine groups.** the inner run starts from an empty environment and the outer group's variables are gone.
+
 **for a read, look for a `mode=ro` role first.** these are the `.ro` groups in the tree, and they are normally ungated, so a read task should cost no approval at all. reaching for a write or app role to run a `SELECT` is what turns a read into a dialog.
 
 a group that does not exist is an error, not an empty environment. if `secret-run` says `no group '<path>'`, browse with `secret-list` rather than falling back to the whole scope.
 
 never print values. do not run secret-run with env, printenv, set, or a command that logs its environment. do not read the key or decrypt a scope directly.
 
-sensitive groups need a local approval. if the task knows it needs several groups, find them first and then batch them:
+sensitive groups need a local approval. `secret-run` with several groups already batches its own, so this is for approving ahead of a sequence of separate commands:
 
 ~~~bash
 secret-approve <scope> --motive "run the requested check" <group> [<group>...]

@@ -8,7 +8,7 @@ values never reach stdout. every command hands a group to a child process throug
 
 names are readable without values. groups, key names, descriptions and sensitivity marks live in a plaintext index, so a process can work out what exists without decrypting anything.
 
-a command gets one group rather than the whole store, and a group you marked sensitive costs a prompt and a journal entry.
+a command gets the groups it names rather than the whole store, and a group you marked sensitive costs a prompt and a journal entry. a command that needs two groups names two, so the prompt covers those and not the scope.
 
 that is real, and it is also the whole of it.
 

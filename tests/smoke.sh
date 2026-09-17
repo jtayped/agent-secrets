@@ -112,6 +112,45 @@ fi
 result="$(secret-run demo service -- bash -c 'printf "%s" "$SERVICE_API_TOKEN"')"
 [[ "$result" == "first-value" ]]
 
+# two groups that are not one subtree. this is the shape the tool had no answer
+# for: reaching both used to mean --all-groups, which hands over the whole
+# scope, and nesting one run inside another does not work at all -- the outer
+# environment is dropped when the hardened helper steps down to the calling
+# account.
+result="$(secret-run demo service.api pg.demo.ro -- bash -c 'printf "%s|%s" "$SERVICE_API_TOKEN" "$PG_DEMO_RO_USER"')"
+[[ "$result" == "first-value|demo_ro" ]]
+
+# and only those two. naming several narrow groups must not widen to a parent.
+result="$(secret-run demo service.api pg.demo.ro -- bash -c 'printf "%s" "${PG_DEMO_HOST-unset}"')"
+[[ "$result" == "unset" ]]
+
+# overlapping paths are not an error. a parent and one of its children select
+# the same group twice, and each value still arrives once.
+result="$(secret-run demo pg.demo pg.demo.ro -- bash -c 'printf "%s|%s" "$PG_DEMO_HOST" "$PG_DEMO_RO_USER"')"
+[[ "$result" == "db.test|demo_ro" ]]
+
+# every named group is checked before the gate, so a typo in the second one is
+# found before anyone is asked to approve the first.
+if out="$(secret-run demo service.api service.nope -- true 2>&1)"; then
+    echo "expected secret-run to reject an unknown group named second" >&2
+    exit 1
+fi
+[[ "$out" == *"no group 'service.nope'"* ]]
+
+# --all-groups already is the whole scope. combining it with a group name means
+# two different things at once, so say that rather than quietly picking one.
+if out="$(secret-run demo service.api --all-groups -- true 2>&1)"; then
+    echo "expected secret-run to reject --all-groups next to a group name" >&2
+    exit 1
+fi
+[[ "$out" == *"--all-groups"* ]]
+
+if out="$(secret-run demo --all-groups service.api -- true 2>&1)"; then
+    echo "expected secret-run to reject a group name after --all-groups" >&2
+    exit 1
+fi
+[[ "$out" == *"--all-groups"* ]]
+
 # a run naming no group is refused, and the refusal has to be useful: it names
 # the whole-scope form rather than just rejecting, and points at the ungated
 # read-only role, which is what the caller almost always actually wanted.
@@ -194,6 +233,19 @@ fi
 # asks nothing.
 printf 'loose' | secret-set gated LOOSE_KEY --desc "outside every group" >/dev/null
 secret-list gated --keys | grep -qx 'LOOSE_KEY'
+rm -rf "$gate_cache"
+
+# a run naming several groups is gated on exactly those groups. the ungated one
+# still costs nothing while the sensitive one stands denied, and naming both is
+# refused by the one carrying the mark -- the union of what was asked for, not
+# the whole scope and not just the first path.
+deny_cached gated pg.one.rw
+secret-run gated pg.one.ro -- true
+if out="$(secret-run gated pg.one.ro pg.one.rw -- true 2>&1)"; then
+    echo "expected a sensitive group in the set to refuse the whole run" >&2
+    exit 1
+fi
+[[ "$out" == *"denied"* ]]
 rm -rf "$gate_cache"
 
 # `ask` refuses an existing key before it opens a dialog, not after. this is the
