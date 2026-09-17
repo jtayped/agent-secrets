@@ -189,6 +189,20 @@ that the value was stored.
 it refuses an existing key before asking rather than after, so you are never
 asked to retype something only to be told it was already there.
 
+credentials usually come in sets, so ask for them together. `--desc` attaches
+to the path in front of it:
+
+~~~bash
+secret-ask work stripe.publishable_key --desc "publishable" \
+                stripe.secret_key      --desc "live secret key"
+~~~
+
+one approval covers the set, and the values are spliced and encrypted in one
+step, so a cancelled second field cannot leave the first one written.
+
+whether that is one dialog or two depends on what is installed. zenity has a
+multi-field form and gets one; kdialog has none and asks in sequence.
+
 the dotted path becomes the variable name. `work stripe.secret_key` writes
 `STRIPE_SECRET_KEY` into the `stripe` group. it refuses to overwrite something
 that already exists:

@@ -189,6 +189,25 @@ if out="$(secret-ask gated 'not a path' 2>&1)"; then
     exit 1
 fi
 
+# several destinations in one ask. every refusal still happens before the
+# dialog, and a refusal anywhere in the set stores none of it -- the values are
+# spliced together and encrypted once for exactly that reason.
+if out="$(secret-ask gated pg.one.ro.USER2 --desc "one" pg.one.ro.USER2 --desc "again" 2>&1)"; then
+    echo "expected secret-ask to refuse the same key twice in one ask" >&2
+    exit 1
+fi
+[[ "$out" == *"named twice"* ]]
+
+if out="$(secret-ask gated pg.one.ro.NEWA --desc "new" pg.one.ro.PASS --desc "exists" 2>&1)"; then
+    echo "expected secret-ask to refuse when one of several keys exists" >&2
+    exit 1
+fi
+[[ "$out" == *"already exists"* ]]
+if secret-list gated --keys | grep -qx 'PG_ONE_RO_NEWA'; then
+    echo "a refused multi-key ask must store none of it" >&2
+    exit 1
+fi
+
 # the gate runs before the dialog, so a refused write is refused before anyone
 # is asked to type a credential that was never going to be stored.
 deny_cached gated pg.one.rw
@@ -199,6 +218,17 @@ fi
 [[ "$out" == *"denied"* ]]
 if secret-list gated --keys | grep -qx 'PG_ONE_RW_NEWPASS'; then
     echo "a refused ask must not store anything" >&2
+    exit 1
+fi
+
+# one gate for the whole set, and a gated destination anywhere in it refuses
+# the lot before the dialog.
+if out="$(secret-ask gated pg.one.ro.NEWB --desc "ungated" pg.one.rw.NEWC --desc "gated" 2>&1)"; then
+    echo "expected one gated destination to refuse the whole ask" >&2
+    exit 1
+fi
+if secret-list gated --keys | grep -qx 'PG_ONE_RO_NEWB'; then
+    echo "a gated destination must refuse the whole set, not part of it" >&2
     exit 1
 fi
 rm -rf "$gate_cache"
