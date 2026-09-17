@@ -9,6 +9,22 @@ export AGENT_SECRETS_DIR="$test_dir/.secrets"
 export AGENT_SECRETS_HELPER_INSTALLED="$test_dir/no-installed-helper"
 export AGENT_SECRETS_HELPER_LOCAL="$repo_dir/lib/agent-secrets-helper"
 export PATH="$repo_dir/bin:$PATH"
+# the gate's verdict cache follows XDG_RUNTIME_DIR for a helper running as the
+# user. pointing it inside the test directory keeps the suite off the real
+# one, and gives the tests below somewhere to pre-seed a verdict.
+export XDG_RUNTIME_DIR="$test_dir/run"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+gate_cache="$XDG_RUNTIME_DIR/agent-secrets-gate"
+
+# A cached verdict is answered without opening a dialog, on either platform.
+# That is what lets the suite assert which operations reach the gate and which
+# skip it, with no session anywhere and nothing for anyone to click.
+deny_cached() {
+    mkdir -p "$gate_cache"
+    chmod 700 "$gate_cache"
+    printf 'deny 9999999999\n' > "$gate_cache/${1}__${2//./_}"
+}
 
 secret-init >/dev/null
 
@@ -129,6 +145,33 @@ fi
 # the gated group is counted, and a sensitive group is never offered as a hint.
 [[ "$out" == *"1 sensitive group"* ]]
 [[ "$out" != *"pg.one.rw"* ]]
+
+# a write is not a read: the value goes in, and no plaintext comes back out. so
+# the gate follows the destination rather than the whole scope. writing into an
+# ungated group must not consult the sensitive one at all -- before this was
+# narrowed, one added key cost an approval for every sensitive group in the
+# scope.
+deny_cached gated pg.one.rw
+printf 'ro-pass' | secret-set gated pg.one.ro.PASS --desc "one_ro password" >/dev/null
+secret-list gated --keys | grep -qx 'PG_ONE_RO_PASS'
+
+# writing into the sensitive group itself still does consult it, and a refused
+# write stores nothing.
+if printf 'rw-pass' | secret-set gated pg.one.rw.PASS --desc "one_rw password" >/dev/null 2>&1; then
+    echo "expected the write gate to fire for a sensitive destination" >&2
+    exit 1
+fi
+if secret-list gated --keys | grep -qx 'PG_ONE_RW_PASS'; then
+    echo "a refused write must not store anything" >&2
+    exit 1
+fi
+
+# a key landing outside every group is gated on its own name, which is the
+# identity a key marked on its own carries. a new one matches nothing, so it
+# asks nothing.
+printf 'loose' | secret-set gated LOOSE_KEY --desc "outside every group" >/dev/null
+secret-list gated --keys | grep -qx 'LOOSE_KEY'
+rm -rf "$gate_cache"
 
 # --all-groups still reaches ungrouped keys, which is the whole point of keeping
 # it. demo carries no sensitive mark, so this clears no gate and needs no session.

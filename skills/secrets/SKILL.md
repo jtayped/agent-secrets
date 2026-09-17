@@ -91,6 +91,8 @@ the last three attach to the **next** declaration, which is either a `#@g` line 
 
 mark what would be damaging to leak. sensitivity inherits downward and a child cannot opt out, so marking a whole server also gates its read-only roles — worth knowing before marking at that level.
 
+writing follows the destination: storing a value inside a sensitive group asks for approval, about that group. storing one anywhere else asks for nothing. a write never hands a value back, so it is not gated like a read.
+
 the plaintext index is a display cache. after any out-of-band scope change, run:
 
 ~~~bash
