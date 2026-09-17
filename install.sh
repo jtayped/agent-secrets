@@ -41,6 +41,62 @@ if [[ -n "$missing" ]]; then
     exit 1
 fi
 
+# the desktop half. a missing dialog tool is fatal to approvals but not to the
+# install, because the store is still readable and a headless machine is a
+# legitimate place to keep one. say it here rather than at the first blocked
+# approval, which is the worst possible moment to learn it.
+#
+# offering to install it is worth doing because the package name is the same
+# everywhere and the command is not. but it only ever offers: nothing here
+# installs a system package without being told to, and it stays quiet when
+# there is nobody to ask, which is what keeps `install.sh` usable from a
+# script and from tests/upgrade.sh.
+zenity_install_command() {
+    if   command -v pacman  >/dev/null; then printf 'sudo pacman -S --needed zenity'
+    elif command -v apt-get >/dev/null; then printf 'sudo apt-get install -y zenity'
+    elif command -v dnf     >/dev/null; then printf 'sudo dnf install -y zenity'
+    elif command -v zypper  >/dev/null; then printf 'sudo zypper install -y zenity'
+    else return 1; fi
+}
+
+offer_zenity() {
+    local why="$1" cmd reply
+    if ! cmd="$(zenity_install_command)"; then
+        echo "  install zenity with your package manager." >&2
+        return 0
+    fi
+    if [[ ! -t 0 || ! -t 1 ]]; then
+        echo "  install it with: $cmd" >&2
+        return 0
+    fi
+    printf '  %s\n' "$why"
+    printf '  run this now? %s [y/N] ' "$cmd"
+    read -r reply || return 0
+    case "$reply" in
+        [Yy]*) ;;
+        *) echo "  skipped. run it yourself when you want to."; return 0 ;;
+    esac
+    # built as a list, never a string handed to a shell.
+    local -a argv
+    read -r -a argv <<< "$cmd"
+    if "${argv[@]}"; then
+        echo "  zenity installed."
+    else
+        echo "  that did not work. run it yourself: $cmd" >&2
+    fi
+}
+
+if [[ "$os" == Linux ]]; then
+    if ! command -v kdialog >/dev/null && ! command -v zenity >/dev/null; then
+        echo "warning: neither kdialog nor zenity is installed." >&2
+        echo "  sensitive groups cannot be approved without one of them." >&2
+        offer_zenity "a dialog tool is required to approve access to a sensitive group."
+    elif ! command -v zenity >/dev/null; then
+        echo "note: zenity is not installed, so secret-ask asks for one credential at a time."
+        offer_zenity "zenity has a multi-field form, so a whole set of credentials is asked for in one dialog. it would also take over the approval dialog, because one toolkit draws all of them: installing it changes how those look."
+    fi
+fi
+
 install -d -m 700 "$bin_dir" "$lib_dir" "$source_dir"
 for command in secret-init secret-list secret-edit secret-set secret-ask secret-approve secret-run \
                secret-reindex secret-doctor secret-update secret-rekey pg-hosts ssh-hosts \

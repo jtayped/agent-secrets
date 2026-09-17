@@ -62,6 +62,12 @@ secret-ask <scope> <group.path.KEY> --desc "what it is for"
 
 this opens a masked dialog on his screen showing the scope, the variable name and the description. the value goes from the dialog into the encrypted store without passing through the command line or this session. you learn only that it was stored. it refuses an existing key before asking rather than after; pass `--force` to replace one deliberately.
 
+ask for related credentials together rather than one command at a time. `--desc` attaches to the path in front of it, one approval covers the set, and either every value is stored or none is:
+
+~~~bash
+secret-ask <scope> <group>.USER --desc "login" <group>.PASS --desc "password"
+~~~
+
 either way the group path matters as much as the value:
 
 ### pick the group before you write

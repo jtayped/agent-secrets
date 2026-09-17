@@ -92,7 +92,13 @@ put #@sensitive immediately above a group declaration:
 SERVICE_PRODUCTION_TOKEN=replace-me
 ~~~
 
-a sensitive group inherits that mark to child groups. access opens a kdialog confirmation that names the requested group and motive. approvals last 15 minutes by default. a denial exits with code 77 and must not be retried.
+a sensitive group inherits that mark to child groups. access opens a confirmation dialog that names the requested group and motive. approvals last 15 minutes by default. a denial exits with code 77 and must not be retried.
+
+on linux the dialog is zenity or kdialog; on macos it is an applescript dialog. without one of them sensitive groups cannot be approved at all.
+
+one toolkit draws every dialog — the approval gate, the value prompt and the multi-field form — so that one operation never shows you two different widget sets. zenity is preferred where both are installed, because it is the only one that can draw all three: kdialog has no multi-field form, and where it is the only one present `secret-ask` asks for a set one credential at a time.
+
+`secret-doctor` reports which one is in use, and whether a set arrives as one form.
 
 if a task needs several known groups, request one batch approval first:
 
