@@ -25,7 +25,9 @@ use the narrowest group that the task needs:
 secret-run <scope> <group> -- <command> [args...]
 ~~~
 
-a command without a group receives every value in the scope. do not use that form unless the task needs the whole scope. it is also the only form that reaches keys sitting outside any group, and it has to clear every sensitive group in the scope to do so, so a scope with ungrouped keys asks for approvals the task has nothing to do with. group the keys instead.
+the group is required. a run that names none is refused, because without one the command receives every value in the scope and the gate has to clear every sensitive group in it to hand them over. the refusal lists the read-only roles you could have used instead. if the task really does need the whole scope, say so with `--all-groups` — it is the only form that reaches keys sitting outside any group.
+
+**for a read, look for a `mode=ro` role first.** these are the `.ro` groups in the tree, and they are normally ungated, so a read task should cost no approval at all. reaching for a write or app role to run a `SELECT` is what turns a read into a dialog.
 
 a group that does not exist is an error, not an empty environment. if `secret-run` says `no group '<path>'`, browse with `secret-list` rather than falling back to the whole scope.
 
@@ -44,13 +46,50 @@ approval exit codes:
 - 77: approval was denied. stop and ask the store owner.
 - 78: the index is stale or the metadata is malformed. run secret-reindex <scope>.
 
-to store a new value, pipe it on stdin:
+## adding a secret
+
+pipe the value on stdin. never put it in a flag or an argument: that lands in `ps`, in shell history, and in this transcript.
 
 ~~~bash
-openssl rand -base64 32 | secret-set <scope> <group.path.key> --desc "what it is for"
+openssl rand -base64 32 | secret-set <scope> <group.path.KEY> --desc "what it is for"
 ~~~
 
-do not pass a value in a flag or command argument.
+### pick the group before you write
+
+the path is not a label. it becomes the variable name, so `pg.aws.mcps.RW_PASS` is stored as `PG_AWS_MCPS_RW_PASS`, and the key then belongs to the longest declared group matching that prefix. browse first and reuse the shape that is already there:
+
+~~~bash
+secret-list <scope> --tree
+~~~
+
+**a key written with no group path sits at the root of the scope, and nothing can narrow to it.** the only way to read it is `--all-groups`, which has to clear every sensitive group in the scope first. one ungrouped key turns every task that needs it into a whole-scope approval. always give a path.
+
+conventions worth matching:
+
+- one group per thing with its own credentials: a service, a database, a host.
+- postgres roles go under `pg.<server>.<database>.<role>`, where the role segment is its mode: `.ro` read-only, `.rw` read-write, `.app` the owning app role.
+- describe the group, not just the key. the description is what the next reader chooses from, and what the approval dialog shows.
+
+### declaring groups and marks
+
+`--desc` covers the key. a group, an attribute or a sensitivity mark is a `#@` line, which means `secret-edit`. edit the group, not the scope — a large scope opens four lines instead of a hundred:
+
+~~~bash
+secret-edit <scope> <group>
+~~~
+
+~~~
+#@g <dotted.path>  <description>    declare a group
+#@d <text>                          describe the next declaration
+#@a <name>=<value>                  attribute of the next declaration
+#@sensitive [ttl=<seconds>]         gate the next declaration
+~~~
+
+the last three attach to the **next** declaration, which is either a `#@g` line or a `KEY=` line, so a group's header block sits above it. hand-writing these is easy to get one line off; every save re-renders the file in canonical order, so the first save after a hand edit fixes the layout.
+
+`pg-hosts` reads the `server`, `kind` (`endpoint`/`database`/`role`) and `mode` (`ro`/`rw`) attributes. a postgres role with no `mode=ro` is not offered as a read-only option anywhere, which is how a read task ends up reaching for a gated write role.
+
+mark what would be damaging to leak. sensitivity inherits downward and a child cannot opt out, so marking a whole server also gates its read-only roles — worth knowing before marking at that level.
 
 the plaintext index is a display cache. after any out-of-band scope change, run:
 
