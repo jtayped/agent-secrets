@@ -116,8 +116,9 @@ secret-init
 secret-list [scope] [group] [--tree | --keys]
 secret-edit scope [group | --new]
 secret-set scope group.path.key [--desc text] [--force]
+secret-ask scope group.path.key [--desc text] [--force]
 secret-approve scope --motive "short reason" group [group...]
-secret-run scope [group] [--motive "short reason"] -- command [args...]
+secret-run scope (group | --all-groups) [--motive "short reason"] -- command [args...]
 secret-reindex [scope...]
 secret-doctor
 secret-update [--check]
