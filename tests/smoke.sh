@@ -143,8 +143,31 @@ fi
 [[ "$out" == *"pg.one.ro"* ]]
 [[ "$out" == *"default choice for reads"* ]]
 # the gated group is counted, and a sensitive group is never offered as a hint.
-[[ "$out" == *"1 sensitive group"* ]]
+[[ "$out" == *"clear its sensitive group"* ]]
 [[ "$out" != *"pg.one.rw"* ]]
+
+# the count has to be what the dialog would list, not every group carrying an
+# effective mark. sensitivity inherits, and the gate suppresses a child whose
+# parent is already marked because one prompt covers both -- so counting marks
+# rather than prompts promises more dialogs than could ever open.
+"$agent_secrets_helper" encrypt inherited > "$AGENT_SECRETS_DIR/scopes/inherited.env.gpg" <<'scope'
+#@sensitive
+#@g srv  a whole server, marked once.
+SRV_HOST=h
+
+#@g srv.ro  inherits the mark from srv.
+SRV_RO_USER=u
+
+#@g srv.rw  also inherits it.
+SRV_RW_USER=u
+scope
+secret-reindex inherited >/dev/null
+[[ "$(secret-list inherited --tree | grep -c 'sensitive')" == "3" ]]
+out="$(secret-run inherited -- true 2>&1 || true)"
+[[ "$out" == *"clear its sensitive group"* ]] || {
+    echo "expected one prompt to be counted, not three marks: $out" >&2
+    exit 1
+}
 
 # a write is not a read: the value goes in, and no plaintext comes back out. so
 # the gate follows the destination rather than the whole scope. writing into an
