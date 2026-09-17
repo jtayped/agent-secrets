@@ -256,6 +256,23 @@ name the narrowest group that the job needs. leaving the group out hands the
 command every value in the scope, which is occasionally what you want and
 usually is not.
 
+some jobs need two groups that are not one branch of the tree. a deploy that
+calls an api behind cloudflare access needs the api token from one group and
+the access headers from another. name both:
+
+~~~bash
+secret-run work coolify cf_access -- ./deploy.sh
+~~~
+
+both groups become environment variables for that one command. this is not the
+same as leaving the group out: the approval covers only what those groups
+carry, so it is one dialog rather than every sensitive group in the scope.
+
+do not try to reach the second group by nesting one `secret-run` inside
+another. in the hardened setup the inner run starts from an empty environment,
+on purpose, and the outer group's variables are gone by the time the command
+sees them.
+
 do not point it at `env`, `printenv`, `set`, or anything else whose job is to
 print its environment. that undoes the whole point.
 
@@ -342,7 +359,7 @@ secret-edit <scope> --new            make a scope
 secret-edit <scope> <group>          edit one group
 <producer> | secret-set <scope> <group.key> --desc "what it is"
 
-secret-run <scope> <group> -- <command>      hand it over, briefly
+secret-run <scope> <group>... -- <command>   hand it over, briefly
 
 secret-doctor                        what works on this machine
 secret-update --check                what an upgrade would do
