@@ -4,6 +4,8 @@ a small bash tool for encrypted .env scopes, meant for working next to coding ag
 
 each scope is one gpg-encrypted file with a separate key. commands read group and key names without decrypting anything. a root-owned helper can ask for a local desktop approval before a group you marked sensitive reaches an editor or a child process.
 
+![secret-list --tree over a scope, listing groups, key names and descriptions, with one group marked sensitive](.images/secret-list-tree.webp)
+
 ## what this is, and what it is not
 
 this tool shapes how an agent reaches a secret. it does not stop one that decides to take it.
@@ -105,6 +107,11 @@ work:pg.aws  (1 group, 4 keys)  rds instances in eu-west-1
 the count on each subgroup is what is underneath it, so you can tell whether a
 branch is worth opening before you open it.
 
+inside a group, a `*` marks a key that needs an approval before anything reads
+it, and the last line names the command that hands that one group to a program.
+
+![secret-list on a single group, showing three key names with descriptions and a sensitive key marked with an asterisk](.images/secret-list-group.webp)
+
 `--tree` still prints the whole subtree when you want it, and now takes a group
 so you can scope it: `secret-list work pg --tree`. `--keys` prints every
 variable name, one per line, for scripts.
@@ -142,7 +149,19 @@ those groups carry, so it is still one dialog and still not the whole scope:
 secret-run example service.api service.access -- curl -fsS https://api.example.test/me
 ~~~
 
+the child process gets the value. the terminal does not, so the key is not in
+the scrollback an agent reads afterwards.
+
+![two secret-run calls: the command reports the key is 22 characters long and that the variable is set, without either one printing it](.images/secret-run.webp)
+
 never use it with env, printenv, set, or another command whose job is to print the environment.
+
+`pg-hosts` reads the same index and prints what a scope knows about postgres:
+servers, the roles under each one, and the variable names a role sets. enough
+to write the connection without opening the scope. `ssh-hosts` does the same
+for host aliases.
+
+![pg-hosts printing a server, its endpoint keys and two roles under it, one read only and one read/write and marked sensitive](.images/pg-hosts.webp)
 
 ## store layout
 
