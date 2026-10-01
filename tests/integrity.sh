@@ -123,6 +123,56 @@ for value in original-host original-token loose-value require a-different-key; d
 done
 
 # ---------------------------------------------------------------------------
+# writers to one scope take turns.
+#
+# every write decrypts the scope, gets a whole new ciphertext back and moves it
+# into place. eight at once used to keep one of the eight keys, because each
+# started from the same file and each move replaced the one before. worse, they
+# shared one temporary file, so a move could land another writer's ciphertext
+# half written, and then the scope did not open at all.
+seed
+for i in 1 2 3 4 5 6 7 8; do
+    (printf 'parallel-%s' "$i" | secret-set demo "service.par$i" >/dev/null 2>&1) &
+done
+wait
+if ! after="$(plaintext "$scope_file")"; then
+    fail "parallel writes left the scope unreadable"
+    after=""
+fi
+for i in 1 2 3 4 5 6 7 8; do
+    grep -q "^SERVICE_PAR$i=parallel-$i\$" <<< "$after" || fail "a parallel write of SERVICE_PAR$i was lost"
+done
+for var in $all_keys; do
+    grep -q "^$var=" <<< "$after" || fail "parallel writes lost $var"
+done
+
+# a lock left behind by a writer that died is taken over, not waited on forever.
+mkdir -p "$AGENT_SECRETS_DIR/.locks/demo"
+touch -t 200001010000 "$AGENT_SECRETS_DIR/.locks/demo"
+printf 'after-stale' | secret-set demo service.after_stale >/dev/null 2>&1 \
+    || fail "a stale lock was not taken over"
+grep -q '^SERVICE_AFTER_STALE=after-stale$' <<< "$(plaintext "$scope_file")" || fail "the write after a stale lock did not land"
+[[ ! -e "$AGENT_SECRETS_DIR/.locks/demo" ]] || fail "a finished write left its lock behind"
+
+# an edit saved over a write that landed while the editor was open would throw
+# that write away. it is refused instead, and the other write survives.
+seed
+editor="$test_dir/edit-while-written.sh"
+cat > "$editor" <<'sh'
+#!/bin/sh
+printf 'landed-meanwhile' | secret-set demo service.meanwhile >/dev/null
+printf 'SERVICE_FROM_EDITOR=1\n' >> "$1"
+sh
+chmod +x "$editor"
+if EDITOR="$editor" secret-edit demo service >/dev/null 2>"$test_dir/edit.err"; then
+    fail "an edit was saved over a write that landed while it was open"
+fi
+grep -q 'changed while it was open' "$test_dir/edit.err" || fail "the stale edit was refused, but not for that: $(head -2 "$test_dir/edit.err")"
+after="$(plaintext "$scope_file")"
+grep -q '^SERVICE_MEANWHILE=landed-meanwhile$' <<< "$after" || fail "the write made while the editor was open was lost"
+! grep -q '^SERVICE_FROM_EDITOR=' <<< "$after" || fail "the refused edit was written anyway"
+
+# ---------------------------------------------------------------------------
 # mutation test: break the renderer and confirm the save is refused.
 #
 # without this, the key-loss guard in cmd_encrypt is untested code that looks

@@ -422,6 +422,16 @@ automatically, and nothing should.
 **`agent-secrets-gate: timeout`, exit 75.** the dialog went unanswered. try
 again.
 
+**`waiting for another write to work to finish...`.** two commands are writing
+to the same scope, and this one is taking its turn so that neither throws the
+other's change away. it carries on by itself. a lock left by a command that was
+killed is taken over after fifteen minutes; if you know nothing else is
+running, removing `~/.secrets/.locks/work` is safe.
+
+**`work changed while it was open in the editor. nothing was saved.`** something
+wrote to the scope while you had it open, and saving would have replaced that
+write. open it again and make your change on top.
+
 **`the installed helper speaks protocol N`.** you upgraded the commands but not
 the root-owned helper, which is installed separately. the message names the
 command that fixes it.

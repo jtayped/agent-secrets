@@ -171,6 +171,7 @@ for host aliases.
   scopes/       encrypted .env payloads
   index/        key names, groups, descriptions, and sensitivity marks
   key/.key      the 32-byte gpg key
+  .locks/       one empty directory per scope while something writes to it
 ~~~
 
 the index contains no values. it is safe to read, but it can go stale after an out-of-band scope change. run secret-reindex after restoring or replacing a .env.gpg file.

@@ -26,6 +26,10 @@ stat_owner() {
     else stat -c '%U:%G %a' -- "$1"; fi
 }
 
+stat_mtime() {
+    if [[ "$agent_secrets_os" == Darwin ]]; then stat -f '%m' -- "$1"; else stat -c '%Y' -- "$1"; fi
+}
+
 sha256_of_stdin() {
     if [[ "$agent_secrets_os" == Darwin ]]; then shasum -a 256; else sha256sum; fi | cut -d' ' -f1
 }
@@ -168,6 +172,58 @@ duration_seconds() {
         m) n=$((n * 60)) ;;
     esac
     printf '%s\n' "$n"
+}
+
+# ---------------------------------------------------------------------------
+# one writer per scope
+#
+# every write decrypts the scope through the helper, gets a whole new
+# ciphertext back and moves it into place. two writers doing that at once both
+# start from the same file, and whichever moves second throws away what the
+# first stored. eight secret-set calls into one scope at once used to keep one
+# of the eight keys.
+#
+# mkdir is atomic everywhere and flock is not on macos. scopes are locked in
+# sorted order, so two commands that each need several cannot deadlock. a lock
+# whose owner died is taken over once it is older than scope_lock_stale, which
+# has to outlast the longest legitimate hold: secret-ask keeps the lock while
+# you type, and where the toolkit has no form that is one 60 second dialog per
+# value. the locks live outside scopes/, so a sync never carries them.
+scope_lock_stale=900
+scope_locks_held=()
+
+scope_lock() {
+    local dir="$secrets_dir/.locks" scope lock waited now mt
+    mkdir -p "$dir"
+    chmod 700 "$dir"
+    for scope in $(printf '%s\n' "$@" | sort -u); do
+        lock="$dir/$scope"
+        waited=0
+        while ! mkdir "$lock" 2>/dev/null; do
+            now=$(date +%s)
+            mt="$(stat_mtime "$lock" 2>/dev/null || echo "$now")"
+            # take over a dead owner's lock, but always sleep before trying
+            # again: a failing rmdir must not turn this into a busy loop.
+            if (( now - mt > scope_lock_stale )); then rmdir "$lock" 2>/dev/null || true; fi
+            (( waited == 0 )) && echo "waiting for another write to $scope to finish..." >&2
+            sleep 1
+            waited=$((waited + 1))
+            if (( waited > scope_lock_stale )); then
+                echo "error: gave up waiting for the write lock on $scope ($lock)" >&2
+                scope_unlock
+                exit 75
+            fi
+        done
+        scope_locks_held+=("$lock")
+    done
+}
+
+scope_unlock() {
+    local lock
+    for lock in ${scope_locks_held[@]+"${scope_locks_held[@]}"}; do
+        rmdir "$lock" 2>/dev/null || true
+    done
+    scope_locks_held=()
 }
 
 list_scopes() {
