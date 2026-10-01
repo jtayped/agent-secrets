@@ -56,6 +56,12 @@ secret-approve <scope> --motive "deploy and watch it" --for 2h <group>
 
 `--for` takes `30m`, `2h` and so on, up to `12h`. ask for what the task needs, not the maximum: the owner sees the number and can choose the usual 15 minutes instead.
 
+when you are done with a sensitive group well before its window runs out, lock it again:
+
+~~~bash
+secret-approve <scope> --revoke <group>
+~~~
+
 approval exit codes:
 
 - 69: no local approval session is available.

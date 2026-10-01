@@ -125,6 +125,7 @@ secret-edit scope [group | --new]
 secret-set scope group.path.key [--desc text] [--force]
 secret-ask scope group.path.key [--desc text] [group.path.key [--desc text]]... [--force]
 secret-approve scope --motive "short reason" [--for duration] group [group...]
+secret-approve scope --revoke [group...]
 secret-run scope (group [group...] | --all-groups) [--motive "short reason"] [--for duration] -- command [args...]
 secret-reindex [scope...]
 secret-doctor

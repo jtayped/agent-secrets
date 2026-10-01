@@ -338,6 +338,47 @@ secret-approve demo --motive "lifetime check" --for 2h pg.prod || fail "secret-a
 rm -rf "$gate_cache"
 
 # ---------------------------------------------------------------------------
+# locking a group again before its approval runs out.
+"$helper" encrypt relock > "$AGENT_SECRETS_DIR/scopes/relock.env.gpg" <<'scope'
+#@sensitive
+#@g srv  a whole server
+SRV_HOST=h
+
+#@g srv.ro  read-only, guarded by srv
+SRV_RO_USER=u
+
+#@sensitive
+#@g other  something else
+OTHER_TOKEN=t
+
+#@sensitive
+SOLO_KEY=s
+scope
+secret-reindex relock >/dev/null
+
+# revoking srv.ro has to clear the approval that actually opens it, which is
+# srv's. leaving srv approved would leave srv.ro exactly as readable as before.
+verdict allow relock g srv read
+verdict allow relock g srv change
+verdict allow relock g other read
+verdict deny  relock k SOLO_KEY read
+out="$(secret-approve relock --revoke srv.ro)" || fail "secret-approve --revoke srv.ro failed"
+[[ ! -e "$(vfile relock g srv read)" ]] || fail "revoking srv.ro left srv's read approval standing"
+[[ ! -e "$(vfile relock g srv change)" ]] || fail "revoking srv.ro left srv's change approval standing"
+[[ "$out" == *"locked srv (read)"* ]] || fail "the revoke did not say what it locked: $out"
+[[ -e "$(vfile relock g other read)" ]] || fail "revoking srv.ro also locked an unrelated group"
+
+# the whole scope, and never a deny: the owner's no outlives any revoke.
+out="$(secret-approve relock --revoke)" || fail "secret-approve --revoke on a whole scope failed"
+[[ ! -e "$(vfile relock g other read)" ]] || fail "a whole-scope revoke left an approval standing"
+[[ "$out" == *"locked other (read)"* ]] || fail "the whole-scope revoke did not name what it locked: $out"
+[[ "$(field "$(vfile relock k SOLO_KEY read)" 1)" == deny ]] || fail "a revoke cleared the owner's deny"
+verdict allow relock k SOLO_KEY change
+out="$(secret-approve relock --revoke)"
+[[ "$out" == *"locked SOLO_KEY (change)"* ]] || fail "a key's approval was not named by its key: $out"
+rm -rf "$gate_cache"
+
+# ---------------------------------------------------------------------------
 # integrity: nothing the caller did not name may disappear or change.
 seed_capture
 before="$(gpg --quiet --batch --pinentry-mode loopback --passphrase-file "$AGENT_SECRETS_DIR/key/.key" \

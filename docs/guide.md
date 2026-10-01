@@ -307,6 +307,15 @@ secret-run work pg.prod --for 2h -- ./migrate.sh
 the dialog then says two hours, and offers the usual fifteen minutes as a
 second button. `secret-approve` takes `--for` too.
 
+to lock a group again before its time is up:
+
+~~~bash
+secret-approve work --revoke pg.prod    # that group, and any marked group above it
+secret-approve work --revoke            # everything approved in the scope
+~~~
+
+it only clears approvals. a group you denied stays denied for its 30 seconds.
+
 writing into a marked group asks too, and that answer is kept apart from the
 read one. saying yes to storing a value in `pg.prod` does not let anything read
 `pg.prod`, and saying yes to a read does not let anything change it. opening a
