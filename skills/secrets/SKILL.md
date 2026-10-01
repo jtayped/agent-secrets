@@ -95,13 +95,24 @@ either way the group path matters as much as the value:
 
 ### pick the group before you write
 
-the path is not a label. it becomes the variable name, so `pg.aws.mcps.RW_PASS` is stored as `PG_AWS_MCPS_RW_PASS`, and the key then belongs to the longest declared group matching that prefix. browse first and reuse the shape that is already there:
+the path is not a label. the last segment is the key and everything before it is the group, so `pg.aws.mcps.RW_PASS` is stored as `PG_AWS_MCPS_RW_PASS` in the group `pg.aws.mcps`. browse first and reuse the shape that is already there:
 
 ~~~bash
 secret-list <scope> --tree
 ~~~
 
-**a key written with no group path sits at the root of the scope, and nothing can narrow to it.** the only way to read it is `--all-groups`, which has to clear every sensitive group in the scope first. one ungrouped key turns every task that needs it into a whole-scope approval. always give a path.
+**if the group does not exist yet, create it in the same write.** say what it holds with `--group-desc`, and the group is declared along with the key. there is nothing to hand to joel and nothing to edit:
+
+~~~bash
+openssl rand -base64 32 | secret-set <scope> stripe.live.WEBHOOK_SECRET --desc "signs webhook payloads" --group-desc "stripe, live mode"
+secret-ask <scope> stripe.live.SECRET_KEY --desc "live secret key" --group-desc "stripe, live mode" stripe.live.PUBLISHABLE_KEY
+~~~
+
+without `--group-desc` a write into a group that does not exist is refused, and the refusal lists the nearest groups that do. that is on purpose: usually it means a typo, or a group that already exists under another name. either pick one of those, or add `--group-desc` if a new group really is right.
+
+the write is also refused when the key would not end up in the group its path names. that happens when a deeper group's prefix matches the key (`stripe.live.webhook` takes `STRIPE_LIVE_WEBHOOK_URL`), when a new group would take a key out of another group, or when two groups would claim the same prefix (`pg.prod` and `pg_prod`). the message says which. pick another key or group name rather than working around it.
+
+**a key written with no group path sits at the root of the scope, and nothing can narrow to it.** the only way to read it is `--all-groups`, which has to clear every sensitive group in the scope first. one ungrouped key turns every task that needs it into a whole-scope approval. always give a path. a write without one says so when it lands.
 
 conventions worth matching:
 
@@ -111,7 +122,7 @@ conventions worth matching:
 
 ### declaring groups and marks
 
-`--desc` covers the key. a group, an attribute or a sensitivity mark is a `#@` line, which means `secret-edit`. edit the group, not the scope — a large scope opens four lines instead of a hundred:
+`--desc` covers the key, and `--group-desc` declares a new group with its description. replacing a key with `--force --desc` replaces its description too. attributes and sensitivity marks are `#@` lines, which for now means `secret-edit`. edit the group, not the scope — a large scope opens four lines instead of a hundred:
 
 ~~~bash
 secret-edit <scope> <group>

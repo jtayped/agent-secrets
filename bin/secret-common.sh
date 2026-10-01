@@ -79,7 +79,7 @@ secrets_index_dir="$secrets_dir/index"
 # shellcheck disable=SC2034
 readonly AGENT_SECRETS_STORE_FORMAT=1
 # the lowest helper protocol these wrappers can talk to.
-readonly AGENT_SECRETS_MIN_HELPER_PROTOCOL=10
+readonly AGENT_SECRETS_MIN_HELPER_PROTOCOL=11
 
 agent_secrets_self_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -172,6 +172,35 @@ duration_seconds() {
         m) n=$((n * 60)) ;;
     esac
     printf '%s\n' "$n"
+}
+
+# a.b.KEY -> group a.b and variable A_B_KEY. the last segment is the key and
+# everything before it is the group, which has to be a lowercase dotted path:
+# the group in the path is the group the key ends up in, or the write is
+# refused. sets path_group and path_var.
+split_key_path() {
+    local path="$1"
+    if [[ ! "$path" =~ ^[A-Za-z0-9_.]+$ || "$path" == .* || "$path" == *. || "$path" == *..* ]]; then
+        echo "error: bad path '$path'" >&2
+        return 1
+    fi
+    path_group=""
+    [[ "$path" == *.* ]] && path_group="${path%.*}"
+    if [[ -n "$path_group" && ! "$path_group" =~ ^[a-z0-9][a-z0-9_]*(\.[a-z0-9][a-z0-9_]*)*$ ]]; then
+        echo "error: '$path_group' is not a group path. groups are dotted lowercase, and the key is the part after the last dot" >&2
+        return 1
+    fi
+    path_var="$(printf '%s' "$path" | tr '.a-z' '_A-Z')"
+    if [[ ! "$path_var" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+        echo "error: '$path' does not make a usable variable name" >&2
+        return 1
+    fi
+}
+
+ungrouped_note() {
+    echo "note: $1 is outside every group, so nothing can narrow to it. only" >&2
+    echo "  secret-run $2 --all-groups reaches it, and that clears every sensitive group." >&2
+    echo "  give it a group path instead, like $2 <group>.$1" >&2
 }
 
 # ---------------------------------------------------------------------------

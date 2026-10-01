@@ -164,7 +164,7 @@ on linux, `wl-paste` or `xclip -o` instead of `pbpaste`. generating a new one
 works the same way:
 
 ~~~bash
-openssl rand -base64 32 | secret-set work service.api_token --desc "internal api"
+openssl rand -base64 32 | secret-set work service.api_token --desc "internal api" --group-desc "internal services"
 ~~~
 
 ### when someone else has to supply the value
@@ -204,8 +204,22 @@ whether that is one dialog or two depends on what is installed. zenity has a
 multi-field form and gets one; kdialog has none and asks in sequence.
 
 the dotted path becomes the variable name. `work stripe.secret_key` writes
-`STRIPE_SECRET_KEY` into the `stripe` group. it refuses to overwrite something
-that already exists:
+`STRIPE_SECRET_KEY` into the `stripe` group: the last segment is the key, and
+everything before it is the group.
+
+if that group does not exist yet, the write is refused and lists the groups
+nearest to it, in case you meant one of those. to make a new one, say what it
+holds and it is created with the key:
+
+~~~bash
+pbpaste | secret-set work resend.api_key --desc "sending key" --group-desc "transactional email"
+~~~
+
+the key always ends up in the group the path names, or the write says why it
+cannot. a path with no group at all still works, and tells you the key is now
+outside every group, where nothing can hand it to a command on its own.
+
+it refuses to overwrite something that already exists:
 
 ~~~text
 $ printf 'x' | secret-set personal github.token

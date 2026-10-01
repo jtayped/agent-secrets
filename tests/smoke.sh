@@ -335,6 +335,115 @@ secret-list demo --keys | grep -qx 'SERVICE_API_SECOND'
 ! grep -qF 'first-value' "$AGENT_SECRETS_DIR/index/demo.toc"
 ! grep -qF 'second-value' "$AGENT_SECRETS_DIR/index/demo.toc"
 
+# ---------------------------------------------------------------------------
+# the group in the path is the group the key ends up in.
+#
+# a path whose group was never declared used to land outside every group, and
+# the command still said "stored". agents then asked for the #@g line to be
+# added by hand.
+plain_demo() {
+    gpg --quiet --batch --pinentry-mode loopback --passphrase-file "$AGENT_SECRETS_DIR/key/.key" \
+        --decrypt "$AGENT_SECRETS_DIR/scopes/demo.env.gpg" 2>/dev/null
+}
+if out="$(printf 'sk' | secret-set demo stripe.live.SECRET_KEY --desc "live key" 2>&1)"; then
+    echo "expected a write into an undeclared group to be refused without --group-desc" >&2
+    exit 1
+fi
+[[ "$out" == *"no group 'stripe.live'"* && "$out" == *"--group-desc"* ]]
+[[ "$out" == *"groups in this scope"* && "$out" == *"service.api"* ]]
+! secret-list demo --keys | grep -qx 'STRIPE_LIVE_SECRET_KEY'
+
+out="$(printf 'sk' | secret-set demo stripe.live.SECRET_KEY --desc "live key" --group-desc "stripe, live mode")"
+[[ "$out" == *"group stripe.live"* ]]
+secret-list demo --tree | grep -q 'stripe.live.*stripe, live mode'
+[[ "$(secret-run demo stripe.live -- sh -c 'printf %s "$STRIPE_LIVE_SECRET_KEY"')" == sk ]]
+
+# a second key into the group that now exists needs no description for it.
+printf 'pk' | secret-set demo stripe.live.PUBLISHABLE_KEY >/dev/null
+
+# declaring a group for one key must not quietly move another. stripe.live.secret
+# derives STRIPE_LIVE_SECRET_, which STRIPE_LIVE_SECRET_KEY starts with.
+if out="$(printf 'x' | secret-set demo stripe.live.secret.ROTATED --group-desc "rotated secrets" 2>&1)"; then
+    echo "expected a new group that would take a key out of stripe.live to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"STRIPE_LIVE_SECRET_KEY, now in stripe.live"* ]]
+[[ "$(secret-run demo stripe.live -- sh -c 'printf %s "$STRIPE_LIVE_SECRET_KEY"')" == sk ]]
+
+# a deeper group with a longer prefix would take the key, so the write says so
+# instead of storing it somewhere the path did not name.
+printf 'x' | secret-set demo stripe.live.webhook.SIGNING --group-desc "webhook signing" >/dev/null
+if out="$(printf 'y' | secret-set demo stripe.live.WEBHOOK_URL 2>&1)"; then
+    echo "expected a key a deeper group would capture to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"would belong to stripe.live.webhook, not stripe.live"* ]]
+
+# a path with no group must not land in a group whose prefix happens to match.
+if out="$(printf 'z' | secret-set demo SERVICE_API_EXTRA 2>&1)"; then
+    echo "expected an ungrouped path that a group would capture to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"would belong to the group service.api"* ]]
+
+# one that matches no group is stored, and told what that costs.
+out="$(printf 'l' | secret-set demo LONELY_KEY 2>&1)"
+[[ "$out" == *"outside every group"* && "$out" == *"--all-groups"* ]]
+
+# two groups deriving one prefix: whichever sorts first would own every key.
+if out="$(printf 'c' | secret-set demo service_api.X --group-desc "clash" 2>&1)"; then
+    echo "expected a group with the same prefix as service.api to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"same SERVICE_API_ prefix as service.api"* ]]
+
+# group paths are lowercase. the key is only the part after the last dot.
+if out="$(printf 'u' | secret-set demo Stripe.KEY 2>&1)"; then
+    echo "expected an uppercase group path to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"not a group path"* ]]
+
+# a group declared over keys already named for it says which ones it took.
+printf 'old' | secret-set demo PAY_OLD_TOKEN >/dev/null 2>&1
+out="$(printf 'new' | secret-set demo pay.NEW_TOKEN --group-desc "payments" 2>&1)"
+[[ "$out" == *"also took what was already named for it: PAY_OLD_TOKEN"* ]]
+
+# replacing a key with --desc replaces its description, rather than dropping it.
+printf 'sk2' | secret-set demo stripe.live.SECRET_KEY --force --desc "rotated live key" >/dev/null
+tree="$(secret-list demo stripe.live)"
+[[ "$tree" == *"rotated live key"* && "$tree" != *"  live key"* ]]
+[[ "$(plain_demo | grep -c '^#@d rotated live key$')" == 1 ]]
+
+# secret-ask refuses an undeclared group before anyone is asked to type.
+if out="$(secret-ask demo vault.TOKEN --desc "t" 2>&1)"; then
+    echo "expected secret-ask into an undeclared group to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"--group-desc"* ]]
+if out="$(secret-ask demo NOGROUP --group-desc "g" 2>&1)"; then
+    echo "expected --group-desc without a group in the path to be refused" >&2
+    exit 1
+fi
+
+# and declares it when told what it holds. the value dialog is replaced in a
+# subshell, the only way to reach past it without someone typing.
+# ciphertext is binary, so it goes straight to a file: a command substitution
+# would drop its NUL bytes.
+(
+    # shellcheck disable=SC1090,SC2317
+    source "$agent_secrets_helper" || true
+    approval_channel_ok() { return 0; }
+    # ask_values_out is read by the sourced cmd_ask, which shellcheck cannot see.
+    # shellcheck disable=SC2034
+    ask_values() { ask_values_out=(typed-one typed-two); }
+    cmd_ask demo 0 --grouped VAULT_TOKEN "token" vault "the vault" VAULT_ROLE "" vault ""
+) > "$AGENT_SECRETS_DIR/scopes/demo.env.gpg.new"
+mv -f "$AGENT_SECRETS_DIR/scopes/demo.env.gpg.new" "$AGENT_SECRETS_DIR/scopes/demo.env.gpg"
+secret-reindex demo >/dev/null
+secret-list demo --tree | grep -q 'vault.*the vault'
+[[ "$(secret-run demo vault -- sh -c 'printf "%s %s" "$VAULT_TOKEN" "$VAULT_ROLE"')" == "typed-one typed-two" ]]
+
 pg="$(pg-hosts --scope demo)"
 [[ "$pg" == *"demo"* ]]
 [[ "$pg" == *"pg.demo"* ]]

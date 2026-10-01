@@ -59,7 +59,7 @@ add a generated value without placing it in shell history:
 openssl rand -base64 32 | secret-set example service.api.token --desc "token used by the example service"
 ~~~
 
-secret-set derives SERVICE_API_TOKEN from the dotted path. it refuses an existing key unless you pass --force.
+secret-set derives SERVICE_API_TOKEN from the dotted path, and puts it in the group service.api. if that group does not exist yet, add --group-desc "what it holds" to create it. it refuses an existing key unless you pass --force.
 
 ## 3. run a scoped command
 
