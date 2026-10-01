@@ -8,6 +8,7 @@ not by which function it lives in.
 |---|---|---|
 | `key.sh` | the key | the one thing with no recovery path. if it is weak or wrong, every scope is affected at once and nothing else in this list matters. |
 | `trust.sh` | whether hardening is allowed | a root helper that runs something you can replace, or a machine locked out of hardening for no reason. |
+| `gate.sh` | the approval gate | a sensitive value handed to a command nobody approved it for. nothing looks wrong afterwards, which is what makes it worse than a crash. |
 | `rekey.sh` | changing the key | a rekey that strands a scope under a key you no longer have. |
 | `integrity.sh` | the destructive paths | a bug that makes the store **shorter** rather than wrong. |
 | `format.sh` | the scope format | a save that silently changes or drops what you stored. |
@@ -23,8 +24,9 @@ for t in tests/*.sh; do "$t" || break; done
 they need nothing installed. each builds an isolated store under `mktemp -d`,
 points `AGENT_SECRETS_DIR` at it, and removes it on exit. none of them touch
 `~/.secrets`, and none require the hardened setup or a desktop session — a test
-that needed someone to click an approval dialog could not run in ci, so no test
-reads a group marked `#@sensitive`.
+that needed someone to click an approval dialog could not run in ci. where a
+test reaches a group marked `#@sensitive`, it puts a verdict in the gate's cache
+first, so the gate answers from there and never opens a dialog.
 
 ## the ideas worth keeping
 

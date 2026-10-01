@@ -23,7 +23,7 @@ gate_cache="$XDG_RUNTIME_DIR/agent-secrets-gate"
 deny_cached() {
     mkdir -p "$gate_cache"
     chmod 700 "$gate_cache"
-    printf 'deny 9999999999\n' > "$gate_cache/${1}__${2//./_}"
+    printf 'deny 9999999999\n' > "$gate_cache/${1}~g~${2}"
 }
 
 secret-init >/dev/null
