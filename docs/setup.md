@@ -92,7 +92,7 @@ put #@sensitive immediately above a group declaration:
 SERVICE_PRODUCTION_TOKEN=replace-me
 ~~~
 
-a sensitive group inherits that mark to child groups. access opens a confirmation dialog that names the requested group and motive. approvals last 15 minutes by default. a denial exits with code 77 and must not be retried.
+a sensitive group inherits that mark to child groups. access opens a confirmation dialog that names the requested group and motive. approvals last 15 minutes after their last use by default, never more than 12 hours in all, and `--for` on `secret-run` or `secret-approve` asks for a different window. a denial exits with code 77 and must not be retried.
 
 on linux the dialog is zenity or kdialog; on macos it is an applescript dialog. without one of them sensitive groups cannot be approved at all.
 

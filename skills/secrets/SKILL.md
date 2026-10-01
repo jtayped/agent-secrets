@@ -47,6 +47,15 @@ sensitive groups need a local approval. `secret-run` with several groups already
 secret-approve <scope> --motive "run the requested check" <group> [<group>...]
 ~~~
 
+an approval lasts 15 minutes after its last use, and every use starts that again, so steady work through one group costs one dialog. if the task will need a sensitive group on and off for longer than that (a long migration, a deploy you will check on), ask once for the time it needs instead of going back to the owner every 15 minutes:
+
+~~~bash
+secret-run <scope> <group> --for 2h -- <command>
+secret-approve <scope> --motive "deploy and watch it" --for 2h <group>
+~~~
+
+`--for` takes `30m`, `2h` and so on, up to `12h`. ask for what the task needs, not the maximum: the owner sees the number and can choose the usual 15 minutes instead.
+
 approval exit codes:
 
 - 69: no local approval session is available.

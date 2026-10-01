@@ -75,7 +75,7 @@ secrets_index_dir="$secrets_dir/index"
 # shellcheck disable=SC2034
 readonly AGENT_SECRETS_STORE_FORMAT=1
 # the lowest helper protocol these wrappers can talk to.
-readonly AGENT_SECRETS_MIN_HELPER_PROTOCOL=8
+readonly AGENT_SECRETS_MIN_HELPER_PROTOCOL=9
 
 agent_secrets_self_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -153,6 +153,21 @@ require_helper_protocol() {
         return 78
     fi
     return 0
+}
+
+# 90, 90s, 30m or 2h, as seconds. anything else is refused here rather than
+# passed on, so a typo is not read as some other length of time. the helper
+# checks the range itself, because it is the side that has to hold to it.
+duration_seconds() {
+    local n unit
+    [[ "$1" =~ ^([0-9]{1,6})([smh]?)$ ]] || return 1
+    n=$((10#${BASH_REMATCH[1]}))
+    unit="${BASH_REMATCH[2]}"
+    case "$unit" in
+        h) n=$((n * 3600)) ;;
+        m) n=$((n * 60)) ;;
+    esac
+    printf '%s\n' "$n"
 }
 
 list_scopes() {

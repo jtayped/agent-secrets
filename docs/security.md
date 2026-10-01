@@ -33,7 +33,9 @@ the gate needs an active, unlocked, local desktop session and kdialog. it exits 
 - 77 means approval was denied. stop rather than retrying.
 - 78 means an index is stale or metadata is malformed.
 
-the gate uses the encrypted scope metadata, not the writable index. it caches an approval per sensitive group for 15 minutes by default. a sensitive parent covers all of its children.
+the gate uses the encrypted scope metadata, not the writable index. it caches an approval per sensitive group. a sensitive parent covers all of its children.
+
+an approval lasts 15 minutes after its last use by default, or the group's `ttl=`. every use starts that window again, so a group in steady use stays open and an idle one closes on schedule. nothing outlives 12 hours from the moment you said yes, however often it is used, and that ceiling is a constant in the root-owned helper. a command can ask for a different window with `--for`, up to the same 12 hours, and the dialog states the window it is asking for. when that is longer than the group usually gets, the dialog also offers the usual window, so the choice is not between the long one and nothing.
 
 an approval belongs to exactly what the dialog listed. saying yes to `pg_prod` says nothing about `pg.prod`, and saying yes to `pg` does not carry over to a group under it that was marked after you answered. a key marked on its own is cached under its own name, separately from any group spelled the same way.
 

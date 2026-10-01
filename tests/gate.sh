@@ -167,7 +167,7 @@ stubbed() {
         if [[ "$channel" == on ]]; then approval_channel_ok() { return 0; }
         else approval_channel_ok() { return 1; }
         fi
-        ask_dialog() { printf '%s\n%s\n' "$1" "$2" > "$test_dir/dialog"; return "$answer"; }
+        ask_dialog() { printf '%s\n' "$@" > "$test_dir/dialog"; return "$answer"; }
         "$@"
     )
 }
@@ -259,6 +259,82 @@ secret-reindex nested >/dev/null
 verdict deny nested g pg.prod change
 printf 'port' | secret-set nested pg.PORT >/dev/null 2>&1 \
     || fail "writing into pg asked about its marked child pg.prod"
+rm -rf "$gate_cache"
+
+# ---------------------------------------------------------------------------
+# approval lifetime.
+#
+# an allow line is `allow <expires> <hard-expiry> <window>`. using it moves
+# <expires> to now + <window>, never past <hard-expiry>, which is fixed at the
+# yes. these write lines with chosen times and watch what the gate does to them.
+vfile() { helper_call verdict_file "$gate_cache" "$1" "$2" "$3" "$4"; }
+allow_line() {
+    mkdir -p "$gate_cache"
+    chmod 700 "$gate_cache"
+    printf 'allow %s %s %s\n' "$2" "$3" "$4" > "$1"
+}
+field() { awk -v n="$2" '{ print $n }' "$1"; }
+f="$(vfile demo g pg.prod read)"
+
+now=$(date +%s)
+allow_line "$f" $((now + 100)) $((now + 43200)) 900
+secret-run demo pg.prod -- true || fail "an approval with time left did not open"
+(( $(field "$f" 2) >= now + 890 )) || fail "using an approval did not push its expiry out by its window: $(cat "$f")"
+[[ "$(field "$f" 3)" == $((now + 43200)) ]] || fail "using an approval moved its hard expiry: $(cat "$f")"
+
+now=$(date +%s)
+allow_line "$f" $((now + 100)) $((now + 200)) 900
+secret-run demo pg.prod -- true || fail "an approval inside its hard expiry did not open"
+[[ "$(field "$f" 2)" == "$(field "$f" 3)" ]] \
+    || fail "using an approval 100s from its hard expiry should leave it ending exactly there: $(cat "$f")"
+
+now=$(date +%s)
+allow_line "$f" $((now - 1)) $((now + 43200)) 900
+[[ -z "$(helper_call cached_verdict demo g pg.prod "$gate_cache" read)" ]] || fail "an idle approval outlived its window"
+allow_line "$f" $((now + 100)) $((now - 1)) 900
+[[ -z "$(helper_call cached_verdict demo g pg.prod "$gate_cache" read)" ]] || fail "an approval outlived its hard expiry"
+rm -rf "$gate_cache"
+
+# more than twelve hours is refused before anything else, by the wrapper's
+# reading of the duration and by the helper's own range check.
+verdict deny demo g pg.prod read
+out="$(secret-run demo pg.prod --for 13h -- true 2>&1)" && fail "--for 13h was accepted"
+[[ "$out" == *"most an approval can last is 12 hours"* ]] || fail "--for 13h was refused, but not for its length: $out"
+out="$("$helper" run demo pg.prod --for 50000 -- true 2>&1)" && fail "the helper took a 50000 second window"
+[[ "$out" == *"12 hours"* ]] || fail "the helper refused 50000 seconds, but not for its length: $out"
+out="$(secret-run demo pg.prod --for 2x -- true 2>&1)" && fail "--for 2x was accepted"
+[[ "$out" == *"takes a duration"* ]] || fail "--for 2x was refused, but not as a bad duration: $out"
+rm -rf "$gate_cache"
+
+# asking for longer than what was approved asks again rather than silently
+# getting the shorter window. asking for no longer than that does not.
+now=$(date +%s)
+allow_line "$f" $((now + 500)) $((now + 43200)) 900
+rc=0
+stubbed off 0 cmd_run demo pg.prod --for 7200 -- true >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 69 ]] || fail "a 2 hour request was answered by a 15 minute approval (exit $rc)"
+rc=0
+stubbed off 0 cmd_run demo pg.prod --for 600 -- true >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 0 ]] || fail "a 10 minute request was not answered by a 15 minute approval (exit $rc)"
+rm -rf "$gate_cache"
+
+# a request for longer than usual offers the usual window as a second allow.
+rm -f "$test_dir/dialog"
+stubbed on 0 cmd_run demo pg.prod --for 7200 -- true >/dev/null 2>&1 || fail "an allowed 2 hour request did not run"
+grep -qx 'allow 2 hours' "$test_dir/dialog" || fail "the dialog did not offer the requested window as its allow button"
+grep -qx 'allow 15 minutes' "$test_dir/dialog" || fail "the dialog did not offer the usual window as a second button"
+grep -q 'for 2 hours after their last use, and at most 12 hours in all' "$test_dir/dialog" \
+    || fail "the dialog did not state the window and the ceiling: $(cat "$test_dir/dialog")"
+[[ "$(field "$f" 4)" == 7200 ]] || fail "allowing 2 hours did not record a 2 hour window: $(cat "$f")"
+rm -rf "$gate_cache"
+stubbed on 4 cmd_run demo pg.prod --for 7200 -- true >/dev/null 2>&1 || fail "the shorter allow did not run"
+[[ "$(field "$f" 4)" == 900 ]] || fail "the shorter allow did not record the usual window: $(cat "$f")"
+rm -rf "$gate_cache"
+
+# secret-approve takes --for too, and is answered by an approval at least that long.
+now=$(date +%s)
+allow_line "$f" $((now + 500)) $((now + 43200)) 7200
+secret-approve demo --motive "lifetime check" --for 2h pg.prod || fail "secret-approve --for 2h was not answered by a 2 hour approval"
 rm -rf "$gate_cache"
 
 # ---------------------------------------------------------------------------

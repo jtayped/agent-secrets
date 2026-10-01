@@ -14,7 +14,7 @@ read that again before you rely on it, because the difference is the whole point
 
 **what it does.** secrets sit encrypted instead of in plaintext .env files an agent trips over while grepping the repo. values go into the environment of a child process, and no command here prints one to stdout, so a secret does not land in your transcript just because an agent needed it. an agent can browse group names, key names and descriptions without decrypting anything, so it can work out what exists without touching a value. a command receives the groups it names rather than the whole store. groups you mark sensitive open a prompt naming what was asked for and why, and every verdict goes to the system journal.
 
-**what it does not do.** it does not stop an agent that wants the value. the agent can run `secret-run <scope> <group> -- curl ...` against any group you did not mark sensitive, and nothing prompts you. it does not stop an agent from rewriting the commands, either. `~/.local/bin/secret-run` belongs to your account, and while the root-owned helper cannot be replaced, the thing that calls it can. before the root install it protects nothing at all, since your account can read the key file and so can anything running as you. and it does not help once you approve a prompt. an approval lasts fifteen minutes by default and the group stays readable for all of it.
+**what it does not do.** it does not stop an agent that wants the value. the agent can run `secret-run <scope> <group> -- curl ...` against any group you did not mark sensitive, and nothing prompts you. it does not stop an agent from rewriting the commands, either. `~/.local/bin/secret-run` belongs to your account, and while the root-owned helper cannot be replaced, the thing that calls it can. before the root install it protects nothing at all, since your account can read the key file and so can anything running as you. and it does not help once you approve a prompt. an approval lasts fifteen minutes after its last use by default, up to twelve hours if something keeps using it, and the group stays readable for all of it.
 
 what you get is hygiene and visibility rather than containment. the careless path becomes safe and the deliberate path becomes noisy. an agent acting in bad faith with your privileges still wins, and no amount of work on this tool changes that. if you need an agent to be unable to reach a credential, do not give it to a process running as you. run the agent as another user, or keep the credential on another machine.
 
@@ -124,8 +124,8 @@ secret-list [scope] [group] [--tree | --keys]
 secret-edit scope [group | --new]
 secret-set scope group.path.key [--desc text] [--force]
 secret-ask scope group.path.key [--desc text] [group.path.key [--desc text]]... [--force]
-secret-approve scope --motive "short reason" group [group...]
-secret-run scope (group [group...] | --all-groups) [--motive "short reason"] -- command [args...]
+secret-approve scope --motive "short reason" [--for duration] group [group...]
+secret-run scope (group [group...] | --all-groups) [--motive "short reason"] [--for duration] -- command [args...]
 secret-reindex [scope...]
 secret-doctor
 secret-update [--check]

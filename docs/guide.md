@@ -290,9 +290,22 @@ PG_PROD_PASSWORD=replace-me
 
 after the hardening step in [setup.md](setup.md), the next attempt to read that
 group opens a dialog on your desktop naming the scope, the group, its
-description, and the reason given by whatever asked. you allow or deny. an
-allow lasts fifteen minutes so a task does not ask you twenty times, and every
-answer goes to the system journal.
+description, and the reason given by whatever asked. you allow or deny, and
+every answer goes to the system journal.
+
+an allow lasts fifteen minutes from its last use. each read starts the fifteen
+minutes again, so a task that keeps working does not ask you twenty times, and
+one that stops closes on its own. nothing stays open more than twelve hours
+after you said yes, however busy it is.
+
+a command that knows it needs a group for longer can say so:
+
+~~~bash
+secret-run work pg.prod --for 2h -- ./migrate.sh
+~~~
+
+the dialog then says two hours, and offers the usual fifteen minutes as a
+second button. `secret-approve` takes `--for` too.
 
 writing into a marked group asks too, and that answer is kept apart from the
 read one. saying yes to storing a value in `pg.prod` does not let anything read
