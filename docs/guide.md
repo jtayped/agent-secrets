@@ -299,6 +299,11 @@ read one. saying yes to storing a value in `pg.prod` does not let anything read
 `pg.prod`, and saying yes to a read does not let anything change it. opening a
 marked group in `secret-edit` is both at once, so it asks once for both.
 
+taking protection away always asks, every time. removing a `#@sensitive` line,
+lengthening its `ttl=`, or declaring a group that pulls a key out from under a
+marked one opens a dialog when you save that names each key and what it would
+lose, even if you approved the edit a minute ago. adding a mark asks nothing.
+
 a sensitive group covers everything beneath it. mark `pg` and both `pg.prod`
 and `pg.staging` are covered.
 

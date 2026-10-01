@@ -37,6 +37,8 @@ the gate uses the encrypted scope metadata, not the writable index. it caches an
 
 an approval belongs to exactly what the dialog listed. saying yes to `pg_prod` says nothing about `pg.prod`, and saying yes to `pg` does not carry over to a group under it that was marked after you answered. a key marked on its own is cached under its own name, separately from any group spelled the same way.
 
+a save is gated on what it changes, whichever command made it. the helper compares the scope before and after: every marked group above something that changed is asked about, and anything that would leave a key guarded by less than before (removing a mark, lengthening a TTL, or declaring a group that takes a key out from under a marked one) gets a dialog every time, even when a change to that group was just approved. a no to that is remembered for 30 seconds so a retry loop cannot keep asking. adding a mark only tightens things and asks nothing. a group or key that becomes marked starts with no cached verdicts, even if something by that name was approved before.
+
 reading and changing are approved separately. storing a value in a sensitive group, or saving an edit to one, asks about that group, and a yes lets changes through for the TTL without letting anything read the group. a read approval does not let anything change it either. opening a group in `secret-edit` is both, so it asks once for both.
 
 ## handling values
