@@ -294,6 +294,11 @@ description, and the reason given by whatever asked. you allow or deny. an
 allow lasts fifteen minutes so a task does not ask you twenty times, and every
 answer goes to the system journal.
 
+writing into a marked group asks too, and that answer is kept apart from the
+read one. saying yes to storing a value in `pg.prod` does not let anything read
+`pg.prod`, and saying yes to a read does not let anything change it. opening a
+marked group in `secret-edit` is both at once, so it asks once for both.
+
 a sensitive group covers everything beneath it. mark `pg` and both `pg.prod`
 and `pg.staging` are covered.
 

@@ -19,11 +19,16 @@ gate_cache="$XDG_RUNTIME_DIR/agent-secrets-gate"
 
 # A cached verdict is answered without opening a dialog, on either platform.
 # That is what lets the suite assert which operations reach the gate and which
-# skip it, with no session anywhere and nothing for anyone to click.
+# skip it, with no session anywhere and nothing for anyone to click. Reads and
+# changes are cached apart, so the kinds being denied are named.
 deny_cached() {
+    local scope="$1" group="$2" kind
+    shift 2
     mkdir -p "$gate_cache"
     chmod 700 "$gate_cache"
-    printf 'deny 9999999999\n' > "$gate_cache/${1}~g~${2}"
+    for kind in "$@"; do
+        printf 'deny 9999999999\n' > "$gate_cache/${scope}~g~${group}~${kind}"
+    done
 }
 
 secret-init >/dev/null
@@ -213,7 +218,7 @@ out="$(secret-run inherited -- true 2>&1 || true)"
 # ungated group must not consult the sensitive one at all -- before this was
 # narrowed, one added key cost an approval for every sensitive group in the
 # scope.
-deny_cached gated pg.one.rw
+deny_cached gated pg.one.rw read change
 printf 'ro-pass' | secret-set gated pg.one.ro.PASS --desc "one_ro password" >/dev/null
 secret-list gated --keys | grep -qx 'PG_ONE_RO_PASS'
 
@@ -239,7 +244,7 @@ rm -rf "$gate_cache"
 # still costs nothing while the sensitive one stands denied, and naming both is
 # refused by the one carrying the mark -- the union of what was asked for, not
 # the whole scope and not just the first path.
-deny_cached gated pg.one.rw
+deny_cached gated pg.one.rw read
 secret-run gated pg.one.ro -- true
 if out="$(secret-run gated pg.one.ro pg.one.rw -- true 2>&1)"; then
     echo "expected a sensitive group in the set to refuse the whole run" >&2
@@ -285,7 +290,7 @@ fi
 
 # the gate runs before the dialog, so a refused write is refused before anyone
 # is asked to type a credential that was never going to be stored.
-deny_cached gated pg.one.rw
+deny_cached gated pg.one.rw change
 if out="$(secret-ask gated pg.one.rw.NEWPASS --desc "new" 2>&1)"; then
     echo "expected secret-ask to refuse a gated destination" >&2
     exit 1

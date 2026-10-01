@@ -117,6 +117,8 @@ mark what would be damaging to leak. sensitivity inherits downward and a child c
 
 writing follows the destination: storing a value inside a sensitive group asks for approval, about that group. storing one anywhere else asks for nothing. a write never hands a value back, so it is not gated like a read.
 
+a write approval and a read approval are separate answers. getting a value stored in a sensitive group does not mean `secret-run` on that group will go through without a dialog, and an approved read does not cover a write.
+
 the plaintext index is a display cache. after any out-of-band scope change, run:
 
 ~~~bash
