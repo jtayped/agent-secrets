@@ -347,6 +347,32 @@ be selective. mark the credentials that would ruin your week, and leave the
 rest alone. marking everything trains you to click allow without reading, and
 then the prompt is worth nothing.
 
+## organise what is there
+
+groups, descriptions, attributes and marks each have a command, so none of
+this needs an editor and none of it shows you a value.
+
+declare a group. keys already named for it move in, which is also how a key
+written without a group gets one:
+
+~~~bash
+secret-group work stripe --desc "payments"
+secret-group work pg.prod --desc "production database" --sensitive --attr server=prod
+~~~
+
+a key sitting in some other group only moves with `--take`, and the command
+says what it took. change a group or a key afterwards:
+
+~~~bash
+secret-meta work stripe --desc "payments, live and test"
+secret-meta work STRIPE_SECRET_KEY --desc "live secret key"
+secret-meta work pg.prod.ro --attr mode=ro
+secret-meta work pg.prod --ttl 5m
+~~~
+
+add `--dry-run` to see what would change and which prompts it would open,
+without changing anything.
+
 ## back it up
 
 two things to back up, and they belong in different places.

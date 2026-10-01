@@ -13,6 +13,9 @@ export XDG_BIN_HOME="$test_dir/bin"
 export XDG_LIB_HOME="$test_dir/libexec"
 export AGENT_SECRETS_HELPER_INSTALLED="$test_dir/no-installed-helper"
 export AGENT_SECRETS_HELPER_LOCAL="$test_dir/libexec/agent-secrets-helper"
+# a test that reaches an approval dialog fails, rather than drawing one on the
+# desktop of whoever runs the suite.
+export AGENT_SECRETS_NO_DIALOG=1
 export PATH="$XDG_BIN_HOME:$PATH"
 
 fingerprint() {

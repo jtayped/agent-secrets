@@ -8,6 +8,9 @@ trap 'rm -rf "$test_dir"' EXIT
 export AGENT_SECRETS_DIR="$test_dir/.secrets"
 export AGENT_SECRETS_HELPER_INSTALLED="$test_dir/no-installed-helper"
 export AGENT_SECRETS_HELPER_LOCAL="$repo_dir/lib/agent-secrets-helper"
+# a test that reaches an approval dialog fails, rather than drawing one on the
+# desktop of whoever runs the suite.
+export AGENT_SECRETS_NO_DIALOG=1
 export PATH="$repo_dir/bin:$PATH"
 # the gate's verdict cache follows XDG_RUNTIME_DIR for a helper running as the
 # user. pointing it inside the test directory keeps the suite off the real
@@ -386,9 +389,12 @@ if out="$(printf 'z' | secret-set demo SERVICE_API_EXTRA 2>&1)"; then
 fi
 [[ "$out" == *"would belong to the group service.api"* ]]
 
-# one that matches no group is stored, and told what that costs.
+# one that matches no group is stored, and told what that costs. browsing says
+# so too, with the way out.
 out="$(printf 'l' | secret-set demo LONELY_KEY 2>&1)"
 [[ "$out" == *"outside every group"* && "$out" == *"--all-groups"* ]]
+[[ "$(secret-list demo)" == *"outside every group"*"secret-group demo <group>"* ]]
+[[ "$(secret-list demo --tree)" == *"(ungrouped)"*"LONELY_KEY"*"secret-group demo <group>"* ]]
 
 # two groups deriving one prefix: whichever sorts first would own every key.
 if out="$(printf 'c' | secret-set demo service_api.X --group-desc "clash" 2>&1)"; then
@@ -443,6 +449,66 @@ mv -f "$AGENT_SECRETS_DIR/scopes/demo.env.gpg.new" "$AGENT_SECRETS_DIR/scopes/de
 secret-reindex demo >/dev/null
 secret-list demo --tree | grep -q 'vault.*the vault'
 [[ "$(secret-run demo vault -- sh -c 'printf "%s %s" "$VAULT_TOKEN" "$VAULT_ROLE"')" == "typed-one typed-two" ]]
+
+# ---------------------------------------------------------------------------
+# groups and what they say about themselves, without an editor.
+out="$(secret-group demo newsvc --desc "a new service" --attr owner=platform)"
+[[ "$out" == "declared newsvc in demo" ]]
+secret-list demo --tree | grep -q 'newsvc.*a new service'
+
+# loose keys already named for a group move in when it is declared.
+printf 'loose' | secret-set demo NEWSVC2_TOKEN >/dev/null 2>&1
+out="$(secret-group demo newsvc2 --desc "picks up its key" 2>&1)"
+[[ "$out" == *"took the loose keys already named for it: NEWSVC2_TOKEN"* ]]
+[[ "$(secret-run demo newsvc2 -- sh -c 'printf %s "$NEWSVC2_TOKEN"')" == loose ]]
+
+# keys in another group move only when asked to.
+printf 'whsec' | secret-set demo service.api.WEBHOOK_SECRET >/dev/null
+if out="$(secret-group demo service.api.webhook --desc "webhooks" 2>&1)"; then
+    echo "expected a group taking a key out of service.api to need --take" >&2
+    exit 1
+fi
+[[ "$out" == *"SERVICE_API_WEBHOOK_SECRET, now in service.api"* && "$out" == *"--take"* ]]
+secret-group demo service.api.webhook --desc "webhooks" --take >/dev/null 2>&1
+[[ "$(secret-run demo service.api.webhook -- sh -c 'printf %s "$SERVICE_API_WEBHOOK_SECRET"')" == whsec ]]
+
+# --dry-run says what would happen and changes nothing.
+before_sum="$(cksum < "$AGENT_SECRETS_DIR/scopes/demo.env.gpg")"
+out="$(secret-group demo dryrun --desc "not really" --sensitive --ttl 5m --dry-run)"
+[[ "$out" == *"would declare dryrun in demo: not really"* && "$out" == *"ttl 5 minutes"* && "$out" == *"prompts: none"* ]]
+[[ "$(cksum < "$AGENT_SECRETS_DIR/scopes/demo.env.gpg")" == "$before_sum" ]]
+
+# an existing group is changed with secret-meta, not declared twice.
+if out="$(secret-group demo newsvc --desc "again" 2>&1)"; then
+    echo "expected declaring an existing group to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"secret-meta demo newsvc"* ]]
+
+# descriptions and attributes, on a group and on a key.
+secret-meta demo newsvc --desc "the new service, described properly" --unset-attr owner --attr tier=two >/dev/null
+tree="$(secret-list demo --tree)"
+[[ "$tree" == *"the new service, described properly"* ]]
+grep -q $'^GA\tnewsvc\ttier\ttwo$' "$AGENT_SECRETS_DIR/index/demo.toc"
+! grep -q $'^GA\tnewsvc\towner\t' "$AGENT_SECRETS_DIR/index/demo.toc"
+secret-meta demo SERVICE_API_TOKEN --desc 'token, with a \backslash' >/dev/null
+grep -qF $'\ttoken, with a \\backslash' "$AGENT_SECRETS_DIR/index/demo.toc"
+[[ "$(secret-run demo service.api -- sh -c 'printf %s "$SERVICE_API_TOKEN"')" == first-value ]]
+
+out="$(secret-meta demo newsvc --attr tier=three --dry-run)"
+[[ "$out" == *"would change newsvc in demo"* && "$out" == *"set tier=three"* && "$out" == *"prompts: none"* ]]
+grep -q $'^GA\tnewsvc\ttier\ttwo$' "$AGENT_SECRETS_DIR/index/demo.toc"
+
+if out="$(secret-meta demo nosuch --desc "x" 2>&1)"; then
+    echo "expected secret-meta on a missing target to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"no group or key 'nosuch'"* ]]
+if out="$(secret-meta demo newsvc --ttl 10m 2>&1)"; then
+    echo "expected --ttl on an unmarked group to be refused" >&2
+    exit 1
+fi
+[[ "$out" == *"no mark of its own"* ]]
 
 pg="$(pg-hosts --scope demo)"
 [[ "$pg" == *"demo"* ]]

@@ -13,6 +13,9 @@ trap 'rm -rf "$test_dir"' EXIT
 export AGENT_SECRETS_DIR="$test_dir/.secrets"
 export AGENT_SECRETS_HELPER_INSTALLED="$test_dir/no-installed-helper"
 export AGENT_SECRETS_HELPER_LOCAL="$repo_dir/lib/agent-secrets-helper"
+# a test that reaches an approval dialog fails, rather than drawing one on the
+# desktop of whoever runs the suite.
+export AGENT_SECRETS_NO_DIALOG=1
 export PATH="$repo_dir/bin:$PATH"
 helper="$AGENT_SECRETS_HELPER_LOCAL"
 

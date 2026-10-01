@@ -16,6 +16,9 @@ trap 'rm -rf "$test_dir"' EXIT
 export AGENT_SECRETS_DIR="$test_dir/.secrets"
 export AGENT_SECRETS_HELPER_INSTALLED="$test_dir/no-installed-helper"
 export AGENT_SECRETS_HELPER_LOCAL="$repo_dir/lib/agent-secrets-helper"
+# a test that reaches an approval dialog fails, rather than drawing one on the
+# desktop of whoever runs the suite.
+export AGENT_SECRETS_NO_DIALOG=1
 export PATH="$repo_dir/bin:$PATH"
 export XDG_RUNTIME_DIR="$test_dir/run"
 mkdir -p "$XDG_RUNTIME_DIR"
@@ -211,7 +214,7 @@ rm -f "$test_dir/dialog"
 stubbed on 0 cmd_edit_merge capture service.api <<< "$capture_edit" >/dev/null 2>&1 \
     || fail "an allowed loosening was not written"
 grep -q 'removes protection' "$test_dir/dialog" || fail "the loosening dialog did not say so in its title"
-grep -q 'PG_PROD_PASS: no longer behind pg' "$test_dir/dialog" || fail "the dialog did not name the key and what it loses: $(cat "$test_dir/dialog")"
+grep -q 'PG_PROD_PASS: no longer behind pg, and behind nothing' "$test_dir/dialog" || fail "the dialog did not name the key and what it loses: $(cat "$test_dir/dialog")"
 grep -q 'asked every time' "$test_dir/dialog" || fail "the dialog did not say a loosening is never remembered"
 rm -rf "$gate_cache"
 
@@ -379,6 +382,91 @@ out="$(secret-approve relock --revoke)"
 rm -rf "$gate_cache"
 
 # ---------------------------------------------------------------------------
+# secret-group and secret-meta ask what the change policy says, and only that.
+"$helper" encrypt meta > "$AGENT_SECRETS_DIR/scopes/meta.env.gpg" <<'scope'
+#@g open  nothing guards this
+OPEN_TOKEN=o
+
+#@sensitive
+#@g vault  guarded
+VAULT_PASS=v
+VAULT_CHILD_TOKEN=c
+scope
+secret-reindex meta >/dev/null
+meta_file="$AGENT_SECRETS_DIR/scopes/meta.env.gpg"
+
+# adding a mark tightens, and asks nothing. a read verdict cached under the
+# name before the mark existed is dropped with it.
+verdict allow meta g open read
+secret-meta meta open --sensitive >/dev/null || fail "marking a group needed an approval"
+secret-list meta --tree | grep -q 'open.*\[sensitive\]' || fail "the mark did not land"
+[[ ! -e "$(vfile meta g open read)" ]] || fail "a read verdict from before the mark survived it"
+rm -rf "$gate_cache"
+
+# a description is what the approval dialog shows, so changing one on a
+# guarded group asks as a change.
+verdict deny meta g vault change
+before_sum="$(cksum < "$meta_file")"
+if secret-meta meta vault --desc "harmless, really" >/dev/null 2>&1; then
+    fail "the description of a marked group changed without its approval"
+fi
+[[ "$(cksum < "$meta_file")" == "$before_sum" ]] || fail "a refused description change still wrote the scope"
+rm -rf "$gate_cache"
+verdict allow meta g vault change
+secret-meta meta vault --desc "the vault, renamed" >/dev/null || fail "an approved description change was refused"
+rm -rf "$gate_cache"
+
+# removing a mark, or making its approvals last longer, asks every time.
+verdict allow meta g vault change
+rc=0
+stubbed off 0 cmd_meta meta vault 0 unmark >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 69 ]] || fail "--not-sensitive went through on a cached change approval (exit $rc)"
+rc=0
+stubbed off 0 cmd_meta meta vault 0 ttl 7200 >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 69 ]] || fail "a longer ttl went through on a cached change approval (exit $rc)"
+rc=0
+stubbed off 0 cmd_meta meta vault 0 ttl 300 >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 0 ]] || fail "a shorter ttl needed a dialog (exit $rc)"
+rm -rf "$gate_cache"
+
+# a group mark that takes over from a key's own mark is a loosening too: the
+# dialog would show the group's description instead of the key's, and the
+# group's could have been written by whatever marked it.
+"$helper" encrypt solo > "$AGENT_SECRETS_DIR/scopes/solo.env.gpg" <<'scope'
+#@g root  root credentials
+#@sensitive
+#@d the production root password
+ROOT_PASS=r
+scope
+secret-reindex solo >/dev/null
+out="$(secret-meta solo root --sensitive --dry-run)"
+[[ "$out" == *"asks every time: ROOT_PASS no longer behind ROOT_PASS, only behind root"* ]] \
+    || fail "a group mark taking over a key's own mark was not asked about: $out"
+
+# the dry run names the prompt it would open, and writes nothing.
+before_sum="$(cksum < "$meta_file")"
+out="$(secret-meta meta vault --not-sensitive --dry-run)"
+[[ "$out" == *"asks every time: VAULT_PASS no longer behind vault, and behind nothing"* ]] || fail "the dry run did not name the loosening: $out"
+[[ "$(cksum < "$meta_file")" == "$before_sum" ]] || fail "a dry run wrote the scope"
+
+# a group declared under a guarded one asks about that one.
+verdict deny meta g vault change
+if secret-group meta vault.child --desc "under the vault" --take >/dev/null 2>&1; then
+    fail "a group was declared under vault without vault's approval"
+fi
+rm -rf "$gate_cache"
+
+# and one that takes a key out from under a mark asks every time, --take or not.
+verdict deny meta g vault change
+if secret-group meta vault_child --desc "next to the vault" --take >/dev/null 2>&1; then
+    fail "a group took VAULT_CHILD_TOKEN out from under vault without asking"
+fi
+grep -q '^VAULT_CHILD_TOKEN=' <<< "$(gpg --quiet --batch --pinentry-mode loopback \
+    --passphrase-file "$AGENT_SECRETS_DIR/key/.key" --decrypt "$meta_file" 2>/dev/null)" \
+    || fail "a refused group declaration lost a key"
+rm -rf "$gate_cache"
+
+# ---------------------------------------------------------------------------
 # integrity: nothing the caller did not name may disappear or change.
 seed_capture
 before="$(gpg --quiet --batch --pinentry-mode loopback --passphrase-file "$AGENT_SECRETS_DIR/key/.key" \
@@ -401,7 +489,7 @@ stubbed off 0 commit_policy capture "$before" "$changed" $'W\tSERVICE_API_TOKEN'
 # without this, the refusal could be coming from somewhere else entirely and
 # the test would keep passing after the check that matters was deleted.
 sabotaged="$test_dir/sabotaged-helper"
-sed 's|printf "L\\t%s\\tno longer behind %s\\n", k2, substr(id, 3); lost\[id\] = 1|sabotaged = 1|' "$helper" > "$sabotaged"
+sed 's|printf "L\\t%s\\tno longer behind %s%s\\n", k2, substr(id, 3), behind(A); lost\[id\] = 1|sabotaged = 1|' "$helper" > "$sabotaged"
 chmod 755 "$sabotaged"
 if cmp -s "$helper" "$sabotaged"; then
     fail "the mutation test did not modify the helper; its sed pattern needs updating"

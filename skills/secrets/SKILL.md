@@ -122,11 +122,29 @@ conventions worth matching:
 
 ### declaring groups and marks
 
-`--desc` covers the key, and `--group-desc` declares a new group with its description. replacing a key with `--force --desc` replaces its description too. attributes and sensitivity marks are `#@` lines, which for now means `secret-edit`. edit the group, not the scope — a large scope opens four lines instead of a hundred:
+`--desc` covers the key, and `--group-desc` declares a new group with its description. replacing a key with `--force --desc` replaces its description too.
+
+everything else about a group or key has its own command. none of them read or write a value, and **none of them need joel to open an editor**. never ask him to hand-edit a scope to add a group, a description, an attribute or a mark:
 
 ~~~bash
-secret-edit <scope> <group>
+secret-group <scope> <group> --desc "what it holds" [--attr name=value]... [--sensitive [--ttl 30m]]
+secret-meta  <scope> <group|KEY> [--desc "..."] [--attr name=value]... [--unset-attr name]
+secret-meta  <scope> <group|KEY> --sensitive [--ttl 30m] | --not-sensitive | --ttl 30m
 ~~~
+
+a group is named by its dotted path, a key by its variable name as `secret-list --keys` prints it.
+
+`secret-group` declares a group that does not exist yet. keys already named for it move in: loose ones always, and keys sitting in another group only with `--take`, since that is a reorganisation and should be asked for as one. it says which keys it took. this is also how to put loose keys into a group without renaming them: declare the group whose prefix they already have.
+
+add `--dry-run` to either command to see what would change and which prompts it would open, without changing anything. do that before anything that touches a sensitive group.
+
+what they ask:
+
+- adding a mark or shortening a TTL asks nothing, with one exception: a group mark that takes over from a key's own mark asks every time, since the dialog would show the group's description instead of the key's.
+- a description or attribute on anything a marked group guards asks as a change. descriptions are what the approval dialog shows, so they are guarded like the values.
+- removing a mark, lengthening a TTL, or declaring a group that takes a key out from under a marked one asks every time.
+
+the `#@` lines underneath, for reading a scope or for joel editing one by hand:
 
 ~~~
 #@g <dotted.path>  <description>    declare a group
@@ -134,8 +152,6 @@ secret-edit <scope> <group>
 #@a <name>=<value>                  attribute of the next declaration
 #@sensitive [ttl=<seconds>]         gate the next declaration
 ~~~
-
-the last three attach to the **next** declaration, which is either a `#@g` line or a `KEY=` line, so a group's header block sits above it. hand-writing these is easy to get one line off; every save re-renders the file in canonical order, so the first save after a hand edit fixes the layout.
 
 `pg-hosts` reads the `server`, `kind` (`endpoint`/`database`/`role`) and `mode` (`ro`/`rw`) attributes. a postgres role with no `mode=ro` is not offered as a read-only option anywhere, which is how a read task ends up reaching for a gated write role.
 

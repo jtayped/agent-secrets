@@ -15,6 +15,9 @@ trap 'rm -rf "$test_dir"' EXIT
 export AGENT_SECRETS_DIR="$test_dir/.secrets"
 export AGENT_SECRETS_HELPER_INSTALLED="$test_dir/no-installed-helper"
 export AGENT_SECRETS_HELPER_LOCAL="$repo_dir/lib/agent-secrets-helper"
+# a test that reaches an approval dialog fails, rather than drawing one on the
+# desktop of whoever runs the suite.
+export AGENT_SECRETS_NO_DIALOG=1
 export PATH="$repo_dir/bin:$PATH"
 helper="$AGENT_SECRETS_HELPER_LOCAL"
 
@@ -121,6 +124,32 @@ for value in original-host original-token loose-value require a-different-key; d
         fail "the value '$value' appears in the index"
     fi
 done
+
+# ---------------------------------------------------------------------------
+# changing what groups and keys say about themselves never touches a value.
+#
+# secret-group and secret-meta rewrite header lines in a payload that also
+# holds every value in the scope. a rewrite that is off by one line would
+# change or drop a value, and the command would still report success.
+seed
+fingerprint() { plaintext "$scope_file" | grep -E '^[A-Za-z_][A-Za-z0-9_]*=' | sort; }
+before_values="$(fingerprint)"
+secret-meta demo pg --desc 'postgres, with a \backslash and a "quote"' --attr owner=data >/dev/null
+secret-meta demo PG_AWS_HOST --desc "the host" --attr region=eu >/dev/null
+secret-meta demo PG_AWS_HOST --unset-attr region >/dev/null
+secret-group demo loose --desc "picks up LOOSE_KEY" >/dev/null 2>&1
+secret-group demo service.token --desc "takes SERVICE_TOKEN_ID" --take >/dev/null 2>&1
+# marks last, the group before the key: a change under a marked group asks, a
+# group mark taking over from a key's own mark asks, and this suite never opens
+# a dialog.
+secret-meta demo service --sensitive --ttl 10m >/dev/null
+secret-meta demo SERVICE_TOKEN_ID --sensitive >/dev/null
+[[ "$(fingerprint)" == "$before_values" ]] || {
+    fail "changing metadata changed or lost a value"
+    diff <(printf '%s\n' "$before_values" | sed 's/=.*//') <(fingerprint | sed 's/=.*//') >&2 || true
+}
+grep -q $'^G\tloose\t' "$AGENT_SECRETS_DIR/index/demo.toc" || fail "secret-group did not declare loose"
+grep -q $'^K\tLOOSE_KEY\tloose\t' "$AGENT_SECRETS_DIR/index/demo.toc" || fail "loose did not take LOOSE_KEY"
 
 # ---------------------------------------------------------------------------
 # writers to one scope take turns.
