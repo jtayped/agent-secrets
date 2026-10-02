@@ -98,7 +98,7 @@ if [[ "$os" == Linux ]]; then
 fi
 
 install -d -m 700 "$bin_dir" "$lib_dir" "$source_dir"
-for command in secret-init secret-list secret-edit secret-set secret-ask secret-group secret-meta secret-approve secret-run \
+for command in secret-init secret-list secret-edit secret-set secret-ask secret-group secret-meta secret-mv secret-rm secret-approve secret-run \
                secret-reindex secret-doctor secret-update secret-rekey pg-hosts ssh-hosts \
                secrets-bisync secret-helper-status; do
     install -m 755 "$repo_dir/bin/$command" "$bin_dir/$command"

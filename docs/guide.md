@@ -370,8 +370,25 @@ secret-meta work pg.prod.ro --attr mode=ro
 secret-meta work pg.prod --ttl 5m
 ~~~
 
-add `--dry-run` to see what would change and which prompts it would open,
-without changing anything.
+move a key or a whole group. this renames variables, so whatever reads the
+old name has to change with it:
+
+~~~bash
+secret-mv work OPENAI_KEY ai.openai.API_KEY --group-desc "openai"   # becomes AI_OPENAI_API_KEY
+secret-mv work stage pg.stage                                        # STAGE_HOST becomes PG_STAGE_HOST
+secret-mv work OPENAI_KEY ai.openai.API_KEY --copy                   # keep the old one while you switch over
+~~~
+
+and remove what is no longer needed:
+
+~~~bash
+secret-rm work OLD_TOKEN              # gone, value and all
+secret-rm work stage                  # just the group; its keys move up a level
+secret-rm work stage --with-keys      # the group and everything in it
+~~~
+
+add `--dry-run` to any of these to see what would change and which prompts it
+would open, without changing anything.
 
 ## back it up
 

@@ -510,6 +510,62 @@ if out="$(secret-meta demo newsvc --ttl 10m 2>&1)"; then
 fi
 [[ "$out" == *"no mark of its own"* ]]
 
+# ---------------------------------------------------------------------------
+# moving, copying and removing.
+demo_value() { secret-run demo --all-groups -- sh -c "printf %s \"\$$1\""; }
+
+# a key into a group, created on the way, under its new name.
+out="$(secret-mv demo LONELY_KEY misc.LONELY --group-desc "odds and ends" 2>&1)"
+[[ "$out" == *"LONELY_KEY -> MISC_LONELY, in misc"* && "$out" == *"programs that read the old names"* ]]
+! secret-list demo --keys | grep -qx LONELY_KEY
+[[ "$(secret-run demo misc -- sh -c 'printf %s "$MISC_LONELY"')" == l ]]
+
+# a group, with every key under it renamed to match.
+out="$(secret-mv demo newsvc2 svc.two 2>&1)"
+[[ "$out" == *"newsvc2 -> svc.two"* && "$out" == *"NEWSVC2_TOKEN -> SVC_TWO_TOKEN"* ]]
+secret-list demo --tree | grep -q 'svc.two.*picks up its key'
+[[ "$(secret-run demo svc.two -- sh -c 'printf %s "$SVC_TWO_TOKEN"')" == loose ]]
+
+# a copy keeps the original.
+secret-mv demo SERVICE_API_TOKEN copies.TOKEN --group-desc "copies" --copy >/dev/null 2>&1
+[[ "$(demo_value SERVICE_API_TOKEN)" == first-value && "$(demo_value COPIES_TOKEN)" == first-value ]]
+
+# two keys swapping names in one call.
+printf 'one' | secret-set demo swap.ONE --group-desc "swapping" >/dev/null
+printf 'two' | secret-set demo swap.TWO >/dev/null
+secret-mv demo SWAP_ONE swap.TWO SWAP_TWO swap.ONE >/dev/null 2>&1
+[[ "$(demo_value SWAP_ONE)" == two && "$(demo_value SWAP_TWO)" == one ]]
+
+# a dry run changes nothing.
+before_sum="$(cksum < "$AGENT_SECRETS_DIR/scopes/demo.env.gpg")"
+out="$(secret-mv demo MISC_LONELY elsewhere.LONELY --group-desc "x" --dry-run)"
+[[ "$out" == *"would move in demo"* && "$out" == *"MISC_LONELY -> ELSEWHERE_LONELY"* && "$out" == *"prompts: none"* ]]
+[[ "$(cksum < "$AGENT_SECRETS_DIR/scopes/demo.env.gpg")" == "$before_sum" ]]
+
+# refusals: onto an existing key, into itself, onto an existing group, and a
+# move whose new group would take a key out of another one.
+refused() {
+    local want="$1" out; shift
+    if out="$("$@" 2>&1)"; then echo "expected refusal: $*" >&2; exit 1; fi
+    [[ "$out" == *"$want"* ]] || { echo "refused for the wrong reason: $out" >&2; exit 1; }
+}
+refused "SERVICE_API_SECOND already exists" secret-mv demo COPIES_TOKEN service.api.SECOND
+refused "cannot move inside itself" secret-mv demo svc svc.inner
+refused "group 'service' already exists" secret-mv demo copies service
+refused "PAY_NEW_TOKEN, now in pay" secret-mv demo misc pay.new
+[[ "$(cksum < "$AGENT_SECRETS_DIR/scopes/demo.env.gpg")" == "$before_sum" ]]
+
+# removing: a key; a declaration, whose keys move up; a group with its keys.
+secret-rm demo MISC_LONELY >/dev/null 2>&1
+! secret-list demo --keys | grep -qx MISC_LONELY
+out="$(secret-rm demo svc.two 2>&1)"
+[[ "$out" == *"SVC_TWO_TOKEN is now outside every group"* ]]
+secret-list demo --keys | grep -qx SVC_TWO_TOKEN
+secret-rm demo copies --with-keys >/dev/null 2>&1
+! secret-list demo --keys | grep -qx COPIES_TOKEN
+! grep -q $'^G\tcopies\t' "$AGENT_SECRETS_DIR/index/demo.toc"
+refused "pass --with-keys" secret-rm demo stripe
+
 pg="$(pg-hosts --scope demo)"
 [[ "$pg" == *"demo"* ]]
 [[ "$pg" == *"pg.demo"* ]]

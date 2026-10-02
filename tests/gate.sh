@@ -467,6 +467,82 @@ grep -q '^VAULT_CHILD_TOKEN=' <<< "$(gpg --quiet --batch --pinentry-mode loopbac
 rm -rf "$gate_cache"
 
 # ---------------------------------------------------------------------------
+# moving and removing ask what the change policy says.
+seed_move() {
+    "$helper" encrypt moves > "$AGENT_SECRETS_DIR/scopes/moves.env.gpg" <<'scope'
+#@g plain  nothing guards this
+PLAIN_TOKEN=p
+
+#@sensitive
+#@g vault  the production vault
+VAULT_PASS=v
+VAULT_USER=u
+
+#@sensitive
+#@d marked on its own
+SOLO_KEY=s
+scope
+    secret-reindex moves >/dev/null
+}
+seed_move
+moves_file="$AGENT_SECRETS_DIR/scopes/moves.env.gpg"
+moves_plain() {
+    gpg --quiet --batch --pinentry-mode loopback --passphrase-file "$AGENT_SECRETS_DIR/key/.key" \
+        --decrypt "$moves_file" 2>/dev/null
+}
+
+# renaming a marked group keeps its keys behind the same mark under the new
+# name, so it is a change to vault and not a loosening. an approval cached
+# under the new name before it existed was given to something else.
+verdict allow moves g vault change
+verdict allow moves g safe read
+secret-mv moves vault safe >/dev/null 2>&1 || fail "renaming a marked group was refused with its change approved"
+secret-list moves --tree | grep -q 'safe \[sensitive\].*the production vault' || fail "the renamed group lost its mark or description"
+[[ ! -e "$(vfile moves g safe read)" ]] || fail "a read verdict cached under the new name survived the rename"
+rm -rf "$gate_cache"
+
+# a key moving out from under a mark, or a copy of it that nothing guards, asks
+# every time.
+seed_move
+verdict allow moves g vault change
+before_sum="$(cksum < "$moves_file")"
+rc=0; secret-mv moves VAULT_PASS plain.PASS >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 69 ]] || fail "moving VAULT_PASS out of vault did not need a dialog (exit $rc)"
+rc=0; secret-mv moves VAULT_PASS plain.PASS --copy >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 69 ]] || fail "copying VAULT_PASS into plain did not need a dialog (exit $rc)"
+[[ "$(cksum < "$moves_file")" == "$before_sum" ]] || fail "a refused move or copy still wrote the scope"
+rm -rf "$gate_cache"
+
+# a copy of a whole marked group carries its mark, under a name with no
+# approvals yet, so it asks nothing.
+secret-mv moves vault vault_copy --copy >/dev/null 2>&1 || fail "copying a marked group with its mark needed an approval"
+secret-list moves --tree | grep -q 'vault_copy \[sensitive\]' || fail "the copy of vault is not marked"
+rm -rf "$gate_cache"
+
+# a key marked on its own takes its mark to its new name.
+seed_move
+verdict allow moves k SOLO_KEY change
+secret-mv moves SOLO_KEY plain.SOLO >/dev/null 2>&1 || fail "a key marked on its own could not move with its change approved"
+grep -q $'^K\tPLAIN_SOLO\tplain\tSOLO\t1\t1\t' "$AGENT_SECRETS_DIR/index/moves.toc" || fail "the moved key lost its own mark"
+rm -rf "$gate_cache"
+
+# removing a key a mark guards is a change to that group.
+seed_move
+verdict deny moves g vault change
+secret-rm moves VAULT_USER >/dev/null 2>&1 && fail "VAULT_USER was removed without vault's approval"
+grep -q '^VAULT_USER=' <<< "$(moves_plain)" || fail "a refused removal still removed VAULT_USER"
+rm -rf "$gate_cache"
+verdict allow moves g vault change
+secret-rm moves VAULT_USER >/dev/null 2>&1 || fail "an approved removal was refused"
+rm -rf "$gate_cache"
+
+# removing a marked group's declaration leaves its keys behind less.
+verdict allow moves g vault change
+rc=0; secret-rm moves vault >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 69 ]] || fail "removing the vault declaration did not ask about its keys (exit $rc)"
+rm -rf "$gate_cache"
+
+# ---------------------------------------------------------------------------
 # integrity: nothing the caller did not name may disappear or change.
 seed_capture
 before="$(gpg --quiet --batch --pinentry-mode loopback --passphrase-file "$AGENT_SECRETS_DIR/key/.key" \

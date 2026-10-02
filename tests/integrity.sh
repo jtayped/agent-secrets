@@ -152,6 +152,40 @@ grep -q $'^G\tloose\t' "$AGENT_SECRETS_DIR/index/demo.toc" || fail "secret-group
 grep -q $'^K\tLOOSE_KEY\tloose\t' "$AGENT_SECRETS_DIR/index/demo.toc" || fail "loose did not take LOOSE_KEY"
 
 # ---------------------------------------------------------------------------
+# moving and removing touch exactly what they name.
+#
+# a move rewrites variable names in a payload that holds every value in the
+# scope. one renamed line too many, or a value cut at the wrong =, and the
+# store is wrong in a way that looks fine until the value is used.
+seed
+values() { plaintext "$scope_file" | grep -E '^[A-Za-z_][A-Za-z0-9_]*=' | sort; }
+before_values="$(values)"
+secret-mv demo pg.aws db.aws >/dev/null 2>&1                       # PG_AWS_HOST, PG_AWS_PORT -> DB_AWS_*
+secret-mv demo LOOSE_KEY misc.LOOSE --group-desc "misc" >/dev/null 2>&1
+secret-mv demo SERVICE_TOKEN_ID misc.TOKEN_ID --copy >/dev/null 2>&1
+secret-mv demo SERVICE_GITHUB_APP_ID misc.APP_ID MISC_LOOSE service.github.LOOSE >/dev/null 2>&1
+secret-rm demo PG_SSLMODE >/dev/null 2>&1
+expected="$(printf '%s\n' "$before_values" | sed \
+    -e 's/^PG_AWS_HOST=/DB_AWS_HOST=/' -e 's/^PG_AWS_PORT=/DB_AWS_PORT=/' \
+    -e 's/^LOOSE_KEY=/SERVICE_GITHUB_LOOSE=/' -e 's/^SERVICE_GITHUB_APP_ID=/MISC_APP_ID=/' \
+    -e '/^PG_SSLMODE=/d')"
+expected="$(printf '%s\n%s\n' "$expected" "MISC_TOKEN_ID=$(grep '^SERVICE_TOKEN_ID=' <<< "$before_values" | cut -d= -f2-)" | sort)"
+[[ "$(values)" == "$expected" ]] || {
+    fail "moving and removing did not leave exactly the expected keys and values"
+    diff <(printf '%s\n' "$expected" | sed 's/=.*//') <(values | sed 's/=.*//') >&2 || true
+}
+
+# a value containing = and spaces is moved whole, not cut at the first =.
+printf 'a=b c=d ' | secret-set demo misc.EQUALS >/dev/null
+secret-mv demo MISC_EQUALS misc.EQ >/dev/null 2>&1
+grep -qx 'MISC_EQ=a=b c=d ' <<< "$(plaintext "$scope_file")" || fail "a value with = and spaces did not move whole"
+
+# a refused move leaves the file byte-identical.
+before_sum="$(cksum < "$scope_file")"
+secret-mv demo MISC_EQ service.TOKEN >/dev/null 2>&1 && fail "a move onto an existing key went through"
+[[ "$(cksum < "$scope_file")" == "$before_sum" ]] || fail "a refused move changed the scope file"
+
+# ---------------------------------------------------------------------------
 # writers to one scope take turns.
 #
 # every write decrypts the scope, gets a whole new ciphertext back and moves it

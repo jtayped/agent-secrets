@@ -144,6 +144,26 @@ what they ask:
 - a description or attribute on anything a marked group guards asks as a change. descriptions are what the approval dialog shows, so they are guarded like the values.
 - removing a mark, lengthening a TTL, or declaring a group that takes a key out from under a marked one asks every time.
 
+### moving and removing
+
+a key that is in the wrong group, or in none, moves with `secret-mv`. its destination is a dotted path, the same shape `secret-set` takes, and `--group-desc` creates the group on the way if it does not exist:
+
+~~~bash
+secret-mv <scope> OPENAI_KEY ai.openai.API_KEY --group-desc "openai"
+secret-mv <scope> stage pg.stage                 # a whole group, and everything under it
+secret-mv <scope> A x.ONE B x.TWO                # several at once: one change, at most one dialog
+~~~
+
+**moving renames the variable.** `OPENAI_KEY` above becomes `AI_OPENAI_API_KEY`, and anything that reads `$OPENAI_KEY` stops finding it. before moving a key, find what reads it (grep the repo, the deploy config, the shell scripts) and change those in the same piece of work, or ask joel whether the rename is wanted. `--copy` keeps the original, which is the gentler way to migrate a consumer. a key whose name already matches the group needs no move: `secret-group` takes it as it is.
+
+~~~bash
+secret-rm <scope> OLD_TOKEN                      # a key, value and all. no undo
+secret-rm <scope> stage                          # the declaration only. keys move up, and it says where
+secret-rm <scope> stage --with-keys              # the group, its subgroups and every key in them
+~~~
+
+both take `--dry-run`. a move or removal inside a marked group asks as a change; one that leaves a key behind less than before (moving it out from under a mark, copying it somewhere unguarded, removing a marked group's declaration) asks every time.
+
 the `#@` lines underneath, for reading a scope or for joel editing one by hand:
 
 ~~~
